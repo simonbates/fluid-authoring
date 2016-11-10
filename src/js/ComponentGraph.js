@@ -1,10 +1,8 @@
 /*
 Copyright 2016 Raising the Floor - International
-
 Licensed under the Educational Community License (ECL), Version 2.0 or the New
 BSD license. You may not use this file except in compliance with one these
 Licenses.
-
 You may obtain a copy of the ECL 2.0 License and BSD License at
 https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
 */
@@ -203,7 +201,6 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
                 }
             },
             arrowMapper: {
-
             }
         */
         },
@@ -237,11 +234,11 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
                 funcName: "fluid.author.componentGraph.updateComponentView",
                 args: ["{that}", "{change}.path", "{change}.value"]
             },
-            createArrow: {
+/*            createArrow: {
                 path: "idToPath.*",
                 funcName: "fluid.author.componentGraph.updateArrow",
                 args: ["{that}", "{change}.path", "{change}.value"]
-            },
+            },*/
             invalidateLayout: {
                 path: "idToPath",
                 func: "{that}.events.invalidateLayout.fire",
@@ -299,7 +296,13 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
      * including the path, reference and shadow of its parent, and member name within it
      * @param componentGraph {componentGraph} A componentGraph component
      * @param path {String} The string form of a concrete component path in its tree
-     * @return {Object} A structure of pre-geometric info
+     * @return {Object} A structure of pre-geometric info:
+     *    parsed,
+     *    parentSegs,
+     *    memberName,
+     *    parentPath,
+     *    parentId
+     *    parentShadow
      */
     fluid.author.componentGraph.getCoordinates = function (componentGraph, path) {
         var instantiator = fluid.globalInstantiator;
@@ -383,6 +386,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         return recb.rowIndex - reca.rowIndex;
     };
 
+
     // TODO: Abuse of shadow by writing extra fields - need to shallow clone just the fields we read
     //     childrenWidth: here
     //     memberToChild: mapComponent
@@ -391,8 +395,8 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     fluid.author.componentGraph.doLayout = function (componentGraph) {
         fluid.log("LAYOUT BEGUN");
         var records = [];
-        fluid.each(componentGraph.idToViewMember, function (viewMember, id) {
-            records.push(viewMember.viewRecord);
+        fluid.each(componentGraph.idToViewMember, function (viewMember) {
+            records.push(componentGraph[viewMember].viewRecord);
         });
         records.sort(fluid.author.depthComparator);
         var o = componentGraph.options;
@@ -400,7 +404,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         fluid.each(records, function (record) {
             var shadow = record.shadow;
             var view = componentGraph.idToView(shadow.that.id);
-            view.refreshView();
+            view.events.onRefreshView.fire();
             view.readBounds();
             var selfWidth = view.model.layout.width;
             var childrenWidth = -o.horizontalGap;
@@ -537,8 +541,16 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             var viewComponent = componentGraph.idToView(id);
             viewComponent.destroy();
         } else {
-            var options = fluid.author.componentGraph.makeViewComponentOptions(componentGraph, id, path);
-            componentGraph.events.createComponentView.fire(options);
+            fluid.invokeLater(function () { 
+            // Avoid creating a horrific race within the broken model relay system
+                var options = fluid.author.componentGraph.makeViewComponentOptions(componentGraph, id, path);
+                componentGraph.events.createComponentView.fire(options);
+
+                var arrowOptions = fluid.author.componentGraph.makeArrowComponentOptions(componentGraph, id, path);
+                if (arrowOptions.parentId) {
+                    componentGraph.events.createArrow.fire(options);
+                }
+            });
         }
     };
 
@@ -549,10 +561,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             var viewComponent = componentGraph.idToView(id);
             viewComponent.destroy();
         } else {
-            var options = fluid.author.componentGraph.makeArrowComponentOptions(componentGraph, id, path);
-            if (options.parentId) {
-                componentGraph.events.createArrow.fire(options);
-            }
+// TODO: Moved up into componentGraph above to avoid race
         }
     };
 
@@ -560,6 +569,9 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         fluid.log("Rendering container for " + that.id + " rawComponentId " + that.options.rawComponentId);
         var containerMarkup = renderMarkup();
         var container = $(containerMarkup);
+        if (typeof(parentContainer) === "function") {
+            parentContainer = parentContainer();
+        }
         parentContainer.append(container);
         return container;
     };
@@ -636,136 +648,250 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         return outGrades;
     };
 
-// These produce arrays of markup representing table cells - perhaps instead we want arrays of JSON markup    
-    fluid.author.headerCellSource = function (headerContents, count) {
-        return ["<td>" + headerContents + "</td>"].concat(fluid.generate(count - 1, "<td></td>"));
-    };
-    
-    fluid.author.arrayCellSource = function (array) {
-        return fluid.transform(array, function (element) {
-            return "<td>" + element + "</td>";
-        });
-    };
-    /** Construct a "view record" holding useful coordinates based on the target component. These are used during
-     * layout as well as rendering */
-     
     fluid.author.computeViewRecord = function (componentGraph, targetId) {
         var togo = Object.create(fluid.author.computeViewRecord.prototype);
-        togo.shadow = componentGraph.idToShadow[rawComponentId];
+        togo.shadow = componentGraph.idToShadow[targetId];
         togo.that = togo.shadow.that;
         togo.coords = fluid.author.componentGraph.getCoordinates(componentGraph, togo.shadow.path);
         togo.rowIndex = togo.coords.parsed.length;
-        return Object.freeze(togo);  
+        return Object.freeze(togo);
     };
 
     fluid.defaults("fluid.author.componentView", {
         gradeNames: ["fluid.newViewComponent", "fluid.author.containerRenderingView", "fluid.indexedDynamicComponent", "fluid.author.domPositioning", "fluid.author.domReadBounds"],
-        selectors: {
-//            modelView: ".fld-author-modelView",
-//            gradesView: ".fld-author-gradesView"
-        },
         mergePolicy: {
             elements: "noexpand"
         },
-/*        components: {
-            gradesView: {
-                type: "fluid.author.gradesView",
-                options: {
-                    parentContainer: "{componentView}.dom.gradesView"
-                }
-            },
-            modelView: {
-                type: "fluid.author.JSONView",
-                options: {
-                    parentContainer: "{componentView}.dom.modelView"
-                }
-            }
+        distributeOptions: {
+            // This unreasonable hack is currently our best route around FLUID-5028
+            source: "{that}.options.optionsHolder",
+            target: "{that}.options"
         },
-*/
-        members: {
-            viewRecord: "@expand:fluid.author.computeViewRecord({componentGraph}, {that}.options.rawComponentId)",
-        },
-        // From these, synthesize:
-        // i) row markup template holding "cell root" which we can then use to form the container of:
-        // ii) dynamic child components for JSONViewEach
-        // iii) "listeners" which update the RHS - generally via manual model relay 
-        //    grades are funny in that they are not really dynamic, but appear to change as a result of not being computed at the point we first witness the component 
         elements: {
-            gradeNames: {
-                header: "grades:",
-                sourceFunc: "{that}.renderGradeNames",
-                cellClass: "fld-author-gradesView"
+            grades: {
+                title: "grades:",
+                sourceFunc: "{componentView}.prepareGradeNames"
             },
             model: {
-                header: "model:",
-                // TODO: this is dynamic! Changes both with the UI of the JSON view as well as with the underlying model data
-                sourceModel: "{that}.viewRecord.that.model",
-                cellClass: "fld-author-modelView"
+                title: "model:",
+                sourceModelHolder: "{componentView}.viewRecord.that"
             }
         },
+        optionsHolder: "{that}.options.rowMaterials.options",
+        rowMaterials: "@expand:fluid.author.componentView.collectRowMaterials({that}, {that}.options.elements, {that}.viewRecord)",
+        members: {
+            // Holds the target component, etc. at a safe location where it will not confuse the current faulty framework
+            viewRecord: "@expand:fluid.author.computeViewRecord({componentGraph}, {that}.options.rawComponentId)",
+        },
+        events: { // Currently we paint ourselves on creation and so there are no local listeners
+            onRefreshView: null
+        },
         markup: {
-            container: "<div class=\"fld-author-componentView\"><table>%childRows</table></div>",
-            memberRow: "<div class=\"fld-author-member\">%member</div>", // This just floats above the entire component - immutable
-            generalRow: "<tr class=\"%rowClass\"><td>%header</td><td class=\"%cellClass\"></td></tr>",
-            //gradeRow:  "<tr class=\"fld-author-gradeRow fl-author-componentRow\"><td>grades:</td><td class=\"fld-author-gradesView\"></td></tr>",
-            //modelRow:  "<tr class=\"fld-author-modelRow fl-author-componentRow\"><td>model:</td><td class=\"fld-author-modelView\"></td></tr>",
+            container: "<div class=\"fld-author-componentView\">%memberName<table>%childRows</table></div>",
+            memberName: "<div class=\"fld-author-member\">%member</div>",
+            structureRow: "<tr class=\"%structureRow\"><td>%title</td><td class=\"%structureCell\"></td></tr>"
         },
         invokers: {
-            renderGradeNames: "fluid.author.renderGradeNames({that}.viewRecord.that)",
-            renderMarkup: "fluid.author.componentView.renderMarkup({componentGraph}, {that}, {that}.targetHolder.that, {that}.options.markup)",
-//            renderMemberRow: "fluid.author.componentView.renderMemberRow({componentGraph}, {that}, {that}.targetHolder.that, {that}.options.markup)",
-//            renderGradeRows: "fluid.author.componentView.renderGradeRows({componentGraph}, {that}, {that}.targetHolder.that, {that}.options.markup)",
-            refreshView: "fluid.author.componentView.refreshView({that})"
+            prepareGradeNames: "fluid.author.componentView.prepareGradeNames({that}.viewRecord.that)",
+            renderMarkup: "fluid.author.componentView.renderMarkup({componentGraph}, {that}, {that}.viewRecord.that, {that}.options.markup, {that}.options.rowMaterials.rowsMarkup)",
+            renderMemberName: "fluid.author.componentView.renderMemberName({componentGraph}, {that}, {that}.viewRecord.that, {that}.options.markup)"
         }
     });
 
-    fluid.author.componentView.refreshView = function (componentView) {
-        var gradeRows = componentView.renderGradeRows();
-        componentView.locate("gradeRows").replaceWith(gradeRows);
+    // child components are dynamic so we bypass the DOM binder and return to this ancient technique
+    // TODO - is this race-breaking really necessary now?
+    fluid.author.makeLocateFunc = function (containerHolder, selector) {
+        return function () {
+            return $(selector, containerHolder.container);
+        };
     };
 
-    fluid.author.componentView.renderMemberRow = function (componentGraph, componentView, that, markupBlock) {
-        var shadow = componentGraph.idToShadow[componentView.options.rawComponentId];
-        var coords = fluid.author.componentGraph.getCoordinates(componentGraph, shadow.path);
-        return coords.memberName === undefined ? "" : fluid.stringTemplate(markupBlock.memberRow, {member: coords.memberName});
+    fluid.author.componentView.elementToRowMaterials = function (componentView, containerHolder, element, elementKey) {
+        var terms = {
+            title: element.title,
+            structureRow: "fld-author-" + elementKey + "Row",
+            structureCell: "fld-author-" + elementKey + "Cell"
+        };
+        var markup = fluid.getForComponent(componentView, "options.markup");
+        var togo = {
+            rowMarkup: fluid.stringTemplate(markup.structureRow, terms),
+            structureCell: terms.structureCell,
+            components: {}
+        };
+        var component = {
+            type: "fluid.author.structureInContainerView"
+        };
+        var options = element.sourceFunc ? {
+            gradeNames: "fluid.author.pullingSICV",
+            invokers: {
+                pullModel: {
+                    func: element.sourceFunc
+                }
+            }
+        } : {
+            components: {
+                modelSource: element.sourceModelHolder
+            },
+            gradeNames: "fluid.author.modelSyncingSICV"
+        };
+        options.parentContainer = fluid.author.makeLocateFunc(containerHolder, terms.structureCell);
+        component.options = options;
+        togo.components[elementKey] = component;
+        return togo;
     };
-    
-    fluid.author.componentView.prepareGradeNames = function (that) {
-        var gradeNames = [that.typeName].concat(fluid.makeArray(fluid.get(that, ["options", "gradeNames"])));
-        var filteredGrades = fluid.author.filterGrades(gradeNames, fluid.author.ignorableGrades);
-        var finalGrades = fluid.author.dedupeGrades(filteredGrades);
-        return finalGrades;
-    };
 
-
-    fluid.author.componentView.renderGradeRows = function (componentGraph, componentView, that, markupBlock) {
-
-        var rows = fluid.transform(finalGrades, function (gradeName, index) {
-            return fluid.stringTemplate(markupBlock[index === 0 ? "gradeRow" : "gradeRow2"], {gradeName: gradeName});
+    fluid.author.componentView.collectRowMaterials = function (componentView, elements, viewRecord) {
+        var rows = [], options = {
+            components: {}
+        };
+        fluid.each(elements, function (element, elementKey) {
+            if (elementKey === "grades" || elementKey === "model" && fluid.hasGrade(viewRecord.that.options, "fluid.modelComponent")) {
+                var materials = fluid.author.componentView.elementToRowMaterials(componentView, componentView, element, elementKey);
+                rows.push(materials.rowMarkup);
+                $.extend(options.components, materials.components);
+            }
         });
-        var gradeRows = rows.join("");
-        return fluid.stringTemplate(markupBlock.gradeRows, {gradeRows: gradeRows});
+        var togo = Object.create(fluid.author.componentView.collectRowMaterials.prototype);
+        togo.rowsMarkup = rows.join("");
+        togo.options = options;
+        return Object.freeze(togo);
     };
 
-    fluid.author.componentView.renderMarkup = function (componentGraph, componentView, that, markupBlock) {
+    // This WANTS to be a "containerRenderingView" but it can't be a very good one under this model. It needs a "parentContainer" which
+    // exists at construct time but it can't - since it is rendered by the parent's construct-time renderer. Therefore we have to
+    // construct these in a separate pass.
+    // NEW current plan: Subcomponents such as this will render strictly later than the construct-time of the parent. Therefore we HOPE
+    // that their construct-time rendering can bind to the already rendered "parentContainer" produced by "elements".
+    fluid.defaults("fluid.author.structureView", {
+        gradeNames: ["fluid.newViewComponent", "fluid.author.containerRenderingView"],
+        selectors: {
+            mutableParent: ".fld-author-structureView-mutableParent"
+        },
+        markup: {
+            container: "<table class=\"fld-author-structureView\"><tbody class=\"fld-author-structureView-mutableParent\">%rows</tbody></table>",
+            rowMarkup: "<tr><td class=\"%rowClass\">%row</td></tr>"
+        },
+        events: { // Cascaded recursively from parent for updates
+            onRefreshView: null
+        },
+        listeners: {
+            "onRefreshView.render": "{that}.renderMarkup()"
+        },
+        invokers: {
+            renderInnerMarkup: {
+                funcName: "fluid.author.structureView.renderInnerMarkup",
+                args: ["{that}.model", "{that}.options.markup"]
+            },
+            renderMarkup: "fluid.author.structureView.renderMarkup({that}, {that}.options.markup, {that}.renderInnerMarkup)"
+        }
+    });
+
+    fluid.defaults("fluid.author.structureInContainerView", {
+        gradeNames: "fluid.author.structureView",
+        listeners: {
+            "{fluid.author.componentView}.events.onRefreshView": {
+                namespace: "render",
+                funcName: "fluid.author.structureView.reRender"
+            }
+        }
+    });
+
+    fluid.defaults("fluid.author.modelSyncingSICV", {
+      /*
+        modelRelay: {
+            source: "{that}.modelSource.model",
+            target: "",
+            singleTransform: {
+                type: "fluid.identity"
+            }
+        },*/
+        components: {
+            modelSource: "fluid.mustBeOverridden"
+        }
+    });
+
+    fluid.defaults("fluid.author.pullingSICV", {
+        listeners: {
+            "{fluid.author.componentView}.events.onRefreshView": {
+                priority: "before:render",
+                namespace: "pullModel",
+                listener: "fluid.author.structureView.pullModel",
+                args: ["{that}"]
+            }
+        }
+    });
+
+    fluid.author.structureView.pullModel = function (structureView) {
+        var model = structureView.pullModel();
+        structureView.applier.change("", model);
+    };
+
+    fluid.author.structureView.reRender = function (componentView, structureView) {
+        // TODO: expansion point here for more graceful incremental markup generation
+        var newMarkup = structureView.renderInnerMarkup();
+        structureView.locate("mutableParent").replaceWith(newMarkup);
+    };
+
+    fluid.author.componentView.renderMarkup = function (componentGraph, componentView, that, markupBlock, rowsMarkup) {
         var containerModel = {
-            childRows: componentView.renderMemberRow() + componentView.renderGradeRows() + componentView.renderModelRow()
+            memberName: fluid.getForComponent(componentView, "renderMemberName")(),
+            childRows: rowsMarkup
         };
         var containerMarkup = fluid.stringTemplate(markupBlock.container, containerModel);
         return containerMarkup;
     };
 
+    fluid.author.componentView.renderMemberName = function (componentGraph, componentView, that, markupBlock) {
+        var shadow = componentGraph.idToShadow[componentView.options.rawComponentId];
+        var coords = fluid.author.componentGraph.getCoordinates(componentGraph, shadow.path);
+        return coords.memberName === undefined ? "" : fluid.stringTemplate(markupBlock.memberName, {member: coords.memberName});
+    };
 
+    fluid.author.componentView.prepareGradeNames = function (targetComponent) {
+        var gradeNames = [targetComponent.typeName].concat(fluid.makeArray(fluid.get(targetComponent, ["options", "gradeNames"])));
+        var filteredGrades = fluid.author.filterGrades(gradeNames, fluid.author.ignorableGrades);
+        var finalGrades = fluid.author.dedupeGrades(filteredGrades);
+        return finalGrades;
+    };
 
-    fluid.defaults("fluid.author.JSONView", {
-        gradeNames: ["fluid.newViewComponent", "fluid.author.containerRenderingView"],
-        markup: {
-            container: "<table class=\"fld-author-JSONView\">%rows</table>",
-            row: "<tr><td class=\"fld-author-JSONRow\">%row</td></tr>"
-        },
-        invokers: {
-            renderMarkup: "fluid.identity({that}.options.markup.container)"
+    fluid.capitalizeFirstLetter = function (string) {
+        return string.charAt(0).toUpperCase() + string.slice(1);
+    };
+
+    fluid.author.structureView.primitiveToString = function (object) {
+        return object === undefined ? "undefined" : JSON.stringify(object);
+    };
+
+    fluid.author.structureView.renderInnerMarkup = function (model, markup) {
+        var rows = [];
+        var renderSingleRow = function (row, rowClass) {
+            return fluid.stringTemplate(markup.rowMarkup, {
+                row: row,
+                rowClass: rowClass
+            });
+        };
+        if (fluid.isPrimitive(model)) {
+            var modelRender = fluid.author.structureView.primitiveToString(model);
+            rows.push(renderSingleRow(modelRender, "fl-structureView-row-primitive"));
+        } else {
+            if (fluid.isArrayable(model)) {
+                rows.push(renderSingleRow("Array[" + model.length + "]", "fl-structureView-row-typeHeader"));
+            } else {
+                rows.push(renderSingleRow("Object", "fl-structureView-row-typeHeader"));
+            }
+            fluid.each(model, function (value, key) {
+                rows.push(renderSingleRow(key + ": " + value, "fl-structureView-row-member"));
+            });
         }
-    });
+        return rows.join("");
+    };
+
+    fluid.author.structureView.renderMarkup = function (structureView, markup, renderInnerMarkup) {
+        var rows = renderInnerMarkup();
+        var containerMarkup = fluid.stringTemplate(markup.container, {
+            rows: rows
+        });
+        return containerMarkup;
+    };
 
 })(jQuery, fluid_2_0_0);
