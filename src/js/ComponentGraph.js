@@ -541,7 +541,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             var viewComponent = componentGraph.idToView(id);
             viewComponent.destroy();
         } else {
-            fluid.invokeLater(function () { 
+            fluid.invokeLater(function () {
             // Avoid creating a horrific race within the broken model relay system
                 var options = fluid.author.componentGraph.makeViewComponentOptions(componentGraph, id, path);
                 componentGraph.events.createComponentView.fire(options);
@@ -681,7 +681,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         rowMaterials: "@expand:fluid.author.componentView.collectRowMaterials({that}, {that}.options.elements, {that}.viewRecord)",
         members: {
             // Holds the target component, etc. at a safe location where it will not confuse the current faulty framework
-            viewRecord: "@expand:fluid.author.computeViewRecord({componentGraph}, {that}.options.rawComponentId)",
+            viewRecord: "@expand:fluid.author.computeViewRecord({componentGraph}, {that}.options.rawComponentId)"
         },
         events: { // Currently we paint ourselves on creation and so there are no local listeners
             onRefreshView: null
@@ -741,9 +741,10 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     };
 
     fluid.author.componentView.collectRowMaterials = function (componentView, elements, viewRecord) {
-        var rows = [], options = {
-            components: {}
-        };
+        var rows = [],
+            options = {
+                components: {}
+            };
         fluid.each(elements, function (element, elementKey) {
             if (elementKey === "grades" || elementKey === "model" && fluid.hasGrade(viewRecord.that.options, "fluid.modelComponent")) {
                 var materials = fluid.author.componentView.elementToRowMaterials(componentView, componentView, element, elementKey);
@@ -774,15 +775,19 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         events: { // Cascaded recursively from parent for updates
             onRefreshView: null
         },
-        listeners: {
-            "onRefreshView.render": "{that}.renderMarkup()"
-        },
         invokers: {
             renderInnerMarkup: {
                 funcName: "fluid.author.structureView.renderInnerMarkup",
                 args: ["{that}.model", "{that}.options.markup"]
             },
-            renderMarkup: "fluid.author.structureView.renderMarkup({that}, {that}.options.markup, {that}.renderInnerMarkup)"
+            renderMarkup: "fluid.author.structureView.renderMarkup({that}, {that}.options.markup, {that}.renderInnerMarkup)",
+            // Cannot be event-driven since may operate during startup
+            pullModel: "fluid.identity()"
+        },
+        listeners: {
+            "onRefreshView.render": {
+                funcName: "fluid.author.structureView.reRender"
+            }
         }
     });
 
@@ -790,8 +795,10 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         gradeNames: "fluid.author.structureView",
         listeners: {
             "{fluid.author.componentView}.events.onRefreshView": {
-                namespace: "render",
-                funcName: "fluid.author.structureView.reRender"
+                // TODO: It's that big multiplicity problem again: https://issues.fluidproject.org/browse/FLUID-5948
+                /* namespace: "refreshChildren", */
+                func: "{that}.events.onRefreshView.fire",
+                args: "{that}"
             }
         }
     });
@@ -822,11 +829,15 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     });
 
     fluid.author.structureView.pullModel = function (structureView) {
-        var model = structureView.pullModel();
-        structureView.applier.change("", model);
+        // TODO: Some miraculous way of constructing zero-cost proxies, or else initialising this member through intelligent ginger flooding
+        var model = fluid.getForComponent(structureView, "pullModel")();
+        if (model !== undefined) {
+            var applier = fluid.getForComponent(structureView, "applier");
+            applier.change("", model);
+        }
     };
 
-    fluid.author.structureView.reRender = function (componentView, structureView) {
+    fluid.author.structureView.reRender = function (structureView) {
         // TODO: expansion point here for more graceful incremental markup generation
         var newMarkup = structureView.renderInnerMarkup();
         structureView.locate("mutableParent").replaceWith(newMarkup);
@@ -887,6 +898,8 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     };
 
     fluid.author.structureView.renderMarkup = function (structureView, markup, renderInnerMarkup) {
+        // TODO: This pathway executes during startup - cannot use events
+        fluid.author.structureView.pullModel(structureView);
         var rows = renderInnerMarkup();
         var containerMarkup = fluid.stringTemplate(markup.container, {
             rows: rows
