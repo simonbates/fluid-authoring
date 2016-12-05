@@ -80,4 +80,5 @@ table.fld-author-JSONView {
 .fld-author-member {
    position: absolute;
    top: -1.5em;
+   white-space: nowrap;
 }

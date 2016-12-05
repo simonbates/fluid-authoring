@@ -238,12 +238,12 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
                 path: "idToPath.*",
                 funcName: "fluid.author.componentGraph.updateArrow",
                 args: ["{that}", "{change}.path", "{change}.value"]
-            },*/
+            },
             invalidateLayout: {
                 path: "idToPath",
                 func: "{that}.events.invalidateLayout.fire",
                 priority: "after:createComponentView"
-            }
+            }*/
         },
         dynamicComponents: {
             componentViews: {
@@ -431,17 +431,21 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             // Start at the extreme position for the window containing all of our children
             var childLeft = view.model.layout.left + (view.model.layout.width - shadow.childrenWidth) / 2;
             fluid.log("Considering component " + shadow.that.id + " at path " + shadow.path + " with " + fluid.keys(shadow.memberToChild).length + " children");
-            fluid.log("Own view has left of " + view.model.layout.left + " childrenWidth is " + shadow.childrenWidth + " starting childLeft at " + childLeft);
+            fluid.log("Own view has id " + view.id + ", left of " + view.model.layout.left + " childrenWidth is " + shadow.childrenWidth + " starting childLeft at " + childLeft);
             fluid.each(shadow.memberToChild, function (child, member) {
                 fluid.log("Considering member " + member);
                 var childShadow = componentGraph.idToShadow[child.id];
                 var childView = componentGraph.idToView(child.id);
+                if (!childView) { // It may be still in creation
+                    fluid.log("SKIPPING child " + child.id + " since no view");
+                    return;
+                }
                 var thisChildLeft = childLeft + (childShadow.childrenWidth - childView.model.layout.width) / 2;
                 childView.applier.change("layout", {
                     left: thisChildLeft,
                     top: o.verticalGap + (record.rowIndex + 1) * (o.boxHeight + o.verticalGap)
                 });
-                fluid.log("Assigned left of " + childLeft + " to component id " + child.id);
+                fluid.log("Assigned left of " + childLeft + " to target component id " + child.id + " view id " + childView.id);
                 rootLayout.height = childView.model.layout.top + (o.boxHeight + o.verticalGap);
                 childLeft += childShadow.childrenWidth + o.horizontalGap;
             });
@@ -542,14 +546,16 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             viewComponent.destroy();
         } else {
             fluid.invokeLater(function () {
+                fluid.log("Firing createComponentView for path " + path + " id " + id);
             // Avoid creating a horrific race within the broken model relay system
                 var options = fluid.author.componentGraph.makeViewComponentOptions(componentGraph, id, path);
                 componentGraph.events.createComponentView.fire(options);
 
                 var arrowOptions = fluid.author.componentGraph.makeArrowComponentOptions(componentGraph, id, path);
                 if (arrowOptions.parentId) {
-                    componentGraph.events.createArrow.fire(options);
+                    componentGraph.events.createArrow.fire(arrowOptions);
                 }
+                componentGraph.events.invalidateLayout.fire();
             });
         }
     };
@@ -687,9 +693,9 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             onRefreshView: null
         },
         markup: {
-            container: "<div class=\"fld-author-componentView\">%memberName<table>%childRows</table></div>",
+            container: "<div class=\"fld-author-componentView\" targetId=\"%targetId\" ownId=\"%ownId\">%memberName<table>%childRows</table></div>",
             memberName: "<div class=\"fld-author-member\">%member</div>",
-            structureRow: "<tr class=\"%structureRow\"><td>%title</td><td class=\"%structureCell\"></td></tr>"
+            structureRow: "<tr class=\"%structureRowClass\"><td>%title</td><td class=\"%structureCellClass\"></td></tr>"
         },
         invokers: {
             prepareGradeNames: "fluid.author.componentView.prepareGradeNames({that}.viewRecord.that)",
@@ -709,13 +715,13 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     fluid.author.componentView.elementToRowMaterials = function (componentView, containerHolder, element, elementKey) {
         var terms = {
             title: element.title,
-            structureRow: "fld-author-" + elementKey + "Row",
-            structureCell: "fld-author-" + elementKey + "Cell"
+            structureRowClass: "fld-author-" + elementKey + "Row",
+            structureCellClass: "fld-author-" + elementKey + "Cell"
         };
         var markup = fluid.getForComponent(componentView, "options.markup");
         var togo = {
             rowMarkup: fluid.stringTemplate(markup.structureRow, terms),
-            structureCell: terms.structureCell,
+            structureCellClass: terms.structureCellClass,
             components: {}
         };
         var component = {
@@ -734,9 +740,9 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             },
             gradeNames: "fluid.author.modelSyncingSICV"
         };
-        options.parentContainer = fluid.author.makeLocateFunc(containerHolder, terms.structureCell);
+        options.parentContainer = fluid.author.makeLocateFunc(containerHolder, "." + terms.structureCellClass);
         component.options = options;
-        togo.components[elementKey] = component;
+        togo.components[elementKey + "Structure"] = component;
         return togo;
     };
 
@@ -756,6 +762,30 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         togo.rowsMarkup = rows.join("");
         togo.options = options;
         return Object.freeze(togo);
+    };
+
+    fluid.author.componentView.renderMarkup = function (componentGraph, componentView, that, markupBlock, rowsMarkup) {
+        var containerModel = {
+            memberName: fluid.getForComponent(componentView, "renderMemberName")(),
+            childRows: rowsMarkup,
+            targetId: that.id,
+            ownId: componentView.id
+        };
+        var containerMarkup = fluid.stringTemplate(markupBlock.container, containerModel);
+        return containerMarkup;
+    };
+
+    fluid.author.componentView.renderMemberName = function (componentGraph, componentView, that, markupBlock) {
+        var shadow = componentGraph.idToShadow[componentView.options.rawComponentId];
+        var coords = fluid.author.componentGraph.getCoordinates(componentGraph, shadow.path);
+        return coords.memberName === undefined ? "" : fluid.stringTemplate(markupBlock.memberName, {member: coords.memberName});
+    };
+
+    fluid.author.componentView.prepareGradeNames = function (targetComponent) {
+        var gradeNames = [targetComponent.typeName].concat(fluid.makeArray(fluid.get(targetComponent, ["options", "gradeNames"])));
+        var filteredGrades = fluid.author.filterGrades(gradeNames, fluid.author.ignorableGrades);
+        var finalGrades = fluid.author.dedupeGrades(filteredGrades);
+        return finalGrades;
     };
 
     // This WANTS to be a "containerRenderingView" but it can't be a very good one under this model. It needs a "parentContainer" which
@@ -804,14 +834,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     });
 
     fluid.defaults("fluid.author.modelSyncingSICV", {
-      /*
-        modelRelay: {
-            source: "{that}.modelSource.model",
-            target: "",
-            singleTransform: {
-                type: "fluid.identity"
-            }
-        },*/
+        model: "{that}.modelSource.model",
         components: {
             modelSource: "fluid.mustBeOverridden"
         }
@@ -841,28 +864,6 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         // TODO: expansion point here for more graceful incremental markup generation
         var newMarkup = structureView.renderInnerMarkup();
         structureView.locate("mutableParent").replaceWith(newMarkup);
-    };
-
-    fluid.author.componentView.renderMarkup = function (componentGraph, componentView, that, markupBlock, rowsMarkup) {
-        var containerModel = {
-            memberName: fluid.getForComponent(componentView, "renderMemberName")(),
-            childRows: rowsMarkup
-        };
-        var containerMarkup = fluid.stringTemplate(markupBlock.container, containerModel);
-        return containerMarkup;
-    };
-
-    fluid.author.componentView.renderMemberName = function (componentGraph, componentView, that, markupBlock) {
-        var shadow = componentGraph.idToShadow[componentView.options.rawComponentId];
-        var coords = fluid.author.componentGraph.getCoordinates(componentGraph, shadow.path);
-        return coords.memberName === undefined ? "" : fluid.stringTemplate(markupBlock.memberName, {member: coords.memberName});
-    };
-
-    fluid.author.componentView.prepareGradeNames = function (targetComponent) {
-        var gradeNames = [targetComponent.typeName].concat(fluid.makeArray(fluid.get(targetComponent, ["options", "gradeNames"])));
-        var filteredGrades = fluid.author.filterGrades(gradeNames, fluid.author.ignorableGrades);
-        var finalGrades = fluid.author.dedupeGrades(filteredGrades);
-        return finalGrades;
     };
 
     fluid.capitalizeFirstLetter = function (string) {
