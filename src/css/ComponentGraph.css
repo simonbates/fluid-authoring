@@ -44,11 +44,6 @@
     top: 20px;
 }
 
-.fld-author-componentView > table {
-    border-collapse: separate;
-    border-spacing: 0px;
-}
-
 .fld-author-componentView td {
     vertical-align: top;
 }
@@ -58,27 +53,38 @@
 }
 
 .fl-author-componentRow {
-   border-bottom: 1px solid #6cd;
+    border-bottom: 1px solid #6cd;
 }
 
 .fld-author-componentView > tbody > tr > td {
-   border-top: 1px solid #6cd;
+    border-top: 1px solid #6cd;
 }
 
-.fld-author-componentView > tbody > tr:first-child > td {
-   border:none;
+.fl-structureCell {
+    padding: 0px;
 }
 
-td.fld-author-modelView {
-   padding: 0px;
-}
 
-table.fld-author-JSONView {
-   border-collapse: collapse;
+table.fld-author-structureView {
+    border-collapse: collapse;
 }
 
 .fld-author-member {
-   position: absolute;
-   top: -1.5em;
-   white-space: nowrap;
+    position: absolute;
+    top: -1.5em;
+    white-space: nowrap;
+}
+
+.fl-author-expander {
+    color: #666;
+    padding-right: 0.1em;
+    margin-left: -0.1em;
+}
+
+.fl-author-expander-closed::after {
+    content: "\25ba";
+}
+
+.fl-author-expander-open::after {
+    content: "\25bc";
 }

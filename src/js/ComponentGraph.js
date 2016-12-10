@@ -233,8 +233,8 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
                 path: "idToPath.*",
                 funcName: "fluid.author.componentGraph.updateComponentView",
                 args: ["{that}", "{change}.path", "{change}.value"]
-            },
-/*            createArrow: {
+            }/*,
+            createArrow: {
                 path: "idToPath.*",
                 funcName: "fluid.author.componentGraph.updateArrow",
                 args: ["{that}", "{change}.path", "{change}.value"]
@@ -328,7 +328,8 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
      * @return {Component} The corresponding {componentView} component
      */
     fluid.author.componentGraph.idToView = function (componentGraph, id) {
-        return componentGraph[componentGraph.idToViewMember[id]];
+        var togo = componentGraph[componentGraph.idToViewMember[id]];
+        return togo;
     };
 
     fluid.author.componentGraph.isIgnorableComponent = function (componentGraph, coords, that) {
@@ -394,7 +395,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     //    path, that
     fluid.author.componentGraph.doLayout = function (componentGraph) {
         fluid.log("LAYOUT BEGUN");
-        var records = [];
+        var records = [], rowHeights = [];
         fluid.each(componentGraph.idToViewMember, function (viewMember) {
             records.push(componentGraph[viewMember].viewRecord);
         });
@@ -413,6 +414,8 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
                 childrenWidth += childShadow.childrenWidth + o.horizontalGap;
             });
             shadow.childrenWidth = Math.max(selfWidth, childrenWidth);
+            var rowIndex = record.rowIndex;
+            rowHeights[rowIndex] = Math.max(rowHeights[rowIndex] | 0, view.model.layout.height);
         });
         records.reverse();
         // Phase 2: Moving downwards, position children with respect to parents
@@ -443,10 +446,10 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
                 var thisChildLeft = childLeft + (childShadow.childrenWidth - childView.model.layout.width) / 2;
                 childView.applier.change("layout", {
                     left: thisChildLeft,
-                    top: o.verticalGap + (record.rowIndex + 1) * (o.boxHeight + o.verticalGap)
+                    top: view.model.layout.top + rowHeights[record.rowIndex] + o.verticalGap
                 });
                 fluid.log("Assigned left of " + childLeft + " to target component id " + child.id + " view id " + childView.id);
-                rootLayout.height = childView.model.layout.top + (o.boxHeight + o.verticalGap);
+                rootLayout.height = childView.model.layout.top + rowHeights[record.rowIndex + 1] + o.verticalGap;
                 childLeft += childShadow.childrenWidth + o.horizontalGap;
             });
         });
@@ -695,7 +698,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         markup: {
             container: "<div class=\"fld-author-componentView\" targetId=\"%targetId\" ownId=\"%ownId\">%memberName<table>%childRows</table></div>",
             memberName: "<div class=\"fld-author-member\">%member</div>",
-            structureRow: "<tr class=\"%structureRowClass\"><td>%title</td><td class=\"%structureCellClass\"></td></tr>"
+            structureRow: "<tr class=\"%structureRowClass\"><td>%title</td><td class=\"%structureCellClass fl-structureCell\"></td></tr>"
         },
         invokers: {
             prepareGradeNames: "fluid.author.componentView.prepareGradeNames({that}.viewRecord.that)",
@@ -798,9 +801,13 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         selectors: {
             mutableParent: ".fld-author-structureView-mutableParent"
         },
+        // The distance in ems that each successive nested level will be indented - should be the width of the dropdown triangle encoded in CSS
+        rowPaddingOffset: 1.1,
         markup: {
             container: "<table class=\"fld-author-structureView\"><tbody class=\"fld-author-structureView-mutableParent\">%rows</tbody></table>",
-            rowMarkup: "<tr><td class=\"%rowClass\">%row</td></tr>"
+            rowMarkup: "<tr><td class=\"%rowClass\" style=\"padding-left: %padding\">%row</td></tr>",
+            expanderClosed: "<span class=\"fl-author-expander fl-author-expander-closed\"></span>",
+            expanderOpen: "<span class=\"fl-author-expander fl-author-expander-open\"></span>"
         },
         events: { // Cascaded recursively from parent for updates
             onRefreshView: null
@@ -808,7 +815,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         invokers: {
             renderInnerMarkup: {
                 funcName: "fluid.author.structureView.renderInnerMarkup",
-                args: ["{that}.model", "{that}.options.markup"]
+                args: ["{that}.model", "{that}.options.markup", "{that}.options.rowPaddingOffset"]
             },
             renderMarkup: "fluid.author.structureView.renderMarkup({that}, {that}.options.markup, {that}.renderInnerMarkup)",
             // Cannot be event-driven since may operate during startup
@@ -874,34 +881,60 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         return object === undefined ? "undefined" : JSON.stringify(object);
     };
 
-    fluid.author.structureView.renderInnerMarkup = function (model, markup) {
-        var rows = [];
-        var renderSingleRow = function (row, rowClass) {
-            return fluid.stringTemplate(markup.rowMarkup, {
-                row: row,
-                rowClass: rowClass
-            });
+    fluid.author.structureView.modelToRowInfo = function (model, segs, expansionModel, depth, rows) {
+        var pushRow = function (rowInfo) {
+            rowInfo.depth = depth;
+            rowInfo.expanded = expansionModel !== undefined;
+            rowInfo.key = segs.length === 0 ? null : segs[segs.length - 1];
+            rows.push(rowInfo);
         };
         if (fluid.isPrimitive(model)) {
             var modelRender = fluid.author.structureView.primitiveToString(model);
-            rows.push(renderSingleRow(modelRender, "fl-structureView-row-primitive"));
+            pushRow({
+                value: modelRender,
+                rowType: "primitive"
+            });
         } else {
             if (fluid.isArrayable(model)) {
-                rows.push(renderSingleRow("Array[" + model.length + "]", "fl-structureView-row-typeHeader"));
+                pushRow({
+                    value: "Array[" + model.length + "]",
+                    rowType: "typeHeader"
+                });
             } else {
-                rows.push(renderSingleRow("Object", "fl-structureView-row-typeHeader"));
+                pushRow({
+                    value: "Object",
+                    rowType: "typeHeader"
+                });
             }
             fluid.each(model, function (value, key) {
-                rows.push(renderSingleRow(key + ": " + value, "fl-structureView-row-member"));
+                fluid.author.structureView.modelToRowInfo(value, segs.concat([key]), fluid.model.getSimple(expansionModel, key), depth + 1, rows);
             });
         }
-        return rows.join("");
+    };
+
+    fluid.author.structureView.renderInnerMarkup = function (model, markup, rowPaddingOffset) {
+        var rows = [];
+        fluid.author.structureView.modelToRowInfo(model, [], undefined, 0, rows);
+        var renderedRows = fluid.transform(rows, function (row) {
+            var renderElements = [
+                row.rowType === "typeHeader" ? (row.expanded ? markup.expanderOpen : markup.expanderClosed) : "",
+                (row.key === null ? "" : row.key + ": "),
+                row.value
+            ];
+            var terms = {
+                rowClass: "fl-structureView-row-" + row.rowType,
+                row: renderElements.join(""),
+                padding: row.depth * rowPaddingOffset + "em"
+            };
+            return fluid.stringTemplate(markup.rowMarkup, terms);
+        });
+        return renderedRows.join("");
     };
 
     fluid.author.structureView.renderMarkup = function (structureView, markup, renderInnerMarkup) {
         // TODO: This pathway executes during startup - cannot use events
         fluid.author.structureView.pullModel(structureView);
-        var rows = renderInnerMarkup();
+        var rows = renderInnerMarkup(structureView.model, 0);
         var containerMarkup = fluid.stringTemplate(markup.container, {
             rows: rows
         });
