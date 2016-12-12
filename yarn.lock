@@ -712,9 +712,9 @@ infusion@2.0.0-dev.20160902T155354Z.b963420:
   dependencies:
     fluid-resolve "1.2.0"
 
-infusion@2.0.0-dev.20161124T191742Z.17a345b:
-  version "2.0.0-dev.20161124T191742Z.17a345b"
-  resolved "https://registry.yarnpkg.com/infusion/-/infusion-2.0.0-dev.20161124T191742Z.17a345b.tgz#8266bc688d1a0afb399aeced06bc3b46efa81b5b"
+infusion@amb26/infusion#FLUID-6091:
+  version "2.0.0"
+  resolved "https://codeload.github.com/amb26/infusion/tar.gz/c35488702acc6b753bdbba2361b66b65fc4dcea6"
   dependencies:
     fluid-resolve "1.2.0"
 

@@ -148,20 +148,6 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         }
     });
 
-    // Sets an SVG attribute on a node created via fluid.author.renderSVGContainer
-    // See http://stackoverflow.com/a/10974727
-    fluid.author.setSVGAttribute = function (jElement, attribute, value) {
-        var element = jElement.documentElement;
-        element.setAttribute(attribute, value);
-    };
-
-    fluid.author.pointsToSVG = function (points) {
-        return fluid.transform(points, function (point) {
-            // Add half-pixel to align rendering
-            return (0.5 + point[0]) + "," + (0.5 + point[1]);
-        }).join(" ");
-    };
-
     fluid.author.svgArrow.renderArrowPoints = function (width, headWidth, length, headHeight) {
         var w = width / 2,
             hw = headWidth / 2,
@@ -173,14 +159,6 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             [hp, -hw], [hp, -w]];
         return fluid.author.pointsToSVG(points);
     };
-
-    fluid.defaults("fluid.author.svgPane", {
-        gradeNames: ["fluid.newViewComponent", "fluid.author.containerRenderingView"],
-        markup: {
-            container: "<svg></svg>"
-        }
-    });
-
 
     fluid.defaults("fluid.author.componentGraph", {
         gradeNames: ["fluid.viewComponent", "fluid.author.viewContainer", "fluid.author.domSizing"],
@@ -574,77 +552,6 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         }
     };
 
-    fluid.author.renderContainer = function (that, renderMarkup, parentContainer) {
-        fluid.log("Rendering container for " + that.id + " rawComponentId " + that.options.rawComponentId);
-        var containerMarkup = renderMarkup();
-        var container = $(containerMarkup);
-        if (typeof(parentContainer) === "function") {
-            parentContainer = parentContainer();
-        }
-        parentContainer.append(container);
-        return container;
-    };
-
-    fluid.author.renderSVGContainer = function (that, renderMarkup, parentContainer) {
-        var containerMarkup = renderMarkup();
-        // Approach taken from http://stackoverflow.com/a/36507333
-        var container = $.parseXML(containerMarkup);
-        var element = container.documentElement;
-        parentContainer.append(element);
-        return element;
-    };
-
-    fluid.defaults("fluid.author.containerRenderingView", {
-        gradeNames: "fluid.newViewComponent",
-        invokers: {
-            renderMarkup: "fluid.identity({that}.options.markup.container)"
-        },
-        container: "@expand:fluid.author.renderContainer({that}, {that}.renderMarkup, {that}.options.parentContainer)",
-        // The DOM element which to which this component should append its markup on startup
-        parentContainer: "fluid.notImplemented" // must be overridden
-    });
-
-    fluid.defaults("fluid.author.containerSVGRenderingView", {
-        gradeNames: "fluid.author.containerRenderingView",
-        container: "@expand:fluid.author.renderSVGContainer({that}, {that}.renderMarkup, {that}.options.parentContainer)"
-    });
-
-    fluid.author.numberToCSS = function (element, value, property) {
-        if (typeof(value) === "number") {
-            element.css(property, value);
-        }
-    };
-
-    // A component with model-bound fields left, top, width, height which map to the equivalent CSS properties
-    fluid.defaults("fluid.author.domPositioning", {
-        modelListeners: {
-            "layout.left":   "fluid.author.numberToCSS({that}.container, {change}.value, left)",
-            "layout.top":    "fluid.author.numberToCSS({that}.container, {change}.value, top)"
-        }
-    });
-
-    fluid.defaults("fluid.author.domSizing", {
-        modelListeners: {
-            "layout.width":  "fluid.author.numberToCSS({that}.container, {change}.value, width)",
-            "layout.height": "fluid.author.numberToCSS({that}.container, {change}.value, height)"
-        }
-    });
-
-    fluid.defaults("fluid.author.domReadBounds", {
-        invokers: {
-            readBounds: "fluid.author.domReadBounds.readBounds({that})"
-        }
-    });
-
-    fluid.author.domReadBounds.readBounds = function (that) {
-        var width = that.container.outerWidth();
-        var height = that.container.outerHeight();
-        that.applier.change("layout", {
-            width: width,
-            height: height
-        });
-    };
-
     // The current framework allows grades to (legitimately) appear multiple times in the resolved list - but this is not helpful in the UI
     fluid.author.dedupeGrades = function (gradeNames) {
         var gradeHash = {}, outGrades = [];
@@ -728,7 +635,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             components: {}
         };
         var component = {
-            type: "fluid.author.structureInContainerView"
+            type: "fluid.author.structureInComponentView"
         };
         var options = element.sourceFunc ? {
             gradeNames: "fluid.author.pullingSICV",
@@ -791,45 +698,11 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         return finalGrades;
     };
 
-    // This WANTS to be a "containerRenderingView" but it can't be a very good one under this model. It needs a "parentContainer" which
-    // exists at construct time but it can't - since it is rendered by the parent's construct-time renderer. Therefore we have to
-    // construct these in a separate pass.
-    // NEW current plan: Subcomponents such as this will render strictly later than the construct-time of the parent. Therefore we HOPE
-    // that their construct-time rendering can bind to the already rendered "parentContainer" produced by "elements".
-    fluid.defaults("fluid.author.structureView", {
-        gradeNames: ["fluid.newViewComponent", "fluid.author.containerRenderingView"],
-        selectors: {
-            mutableParent: ".fld-author-structureView-mutableParent"
-        },
-        // The distance in ems that each successive nested level will be indented - should be the width of the dropdown triangle encoded in CSS
-        rowPaddingOffset: 1.1,
-        markup: {
-            container: "<table class=\"fld-author-structureView\"><tbody class=\"fld-author-structureView-mutableParent\">%rows</tbody></table>",
-            rowMarkup: "<tr><td class=\"%rowClass\" style=\"padding-left: %padding\">%row</td></tr>",
-            expanderClosed: "<span class=\"fl-author-expander fl-author-expander-closed\"></span>",
-            expanderOpen: "<span class=\"fl-author-expander fl-author-expander-open\"></span>"
-        },
-        events: { // Cascaded recursively from parent for updates
-            onRefreshView: null
-        },
-        invokers: {
-            renderInnerMarkup: {
-                funcName: "fluid.author.structureView.renderInnerMarkup",
-                args: ["{that}.model", "{that}.options.markup", "{that}.options.rowPaddingOffset"]
-            },
-            renderMarkup: "fluid.author.structureView.renderMarkup({that}, {that}.options.markup, {that}.renderInnerMarkup)",
-            // Cannot be event-driven since may operate during startup
-            pullModel: "fluid.identity()"
-        },
-        listeners: {
-            "onRefreshView.render": {
-                funcName: "fluid.author.structureView.reRender"
-            }
-        }
-    });
+    /** Some cross-mixin grades for StructureView */
 
-    fluid.defaults("fluid.author.structureInContainerView", {
+    fluid.defaults("fluid.author.structureInComponentView", {
         gradeNames: "fluid.author.structureView",
+        bindingRootReference: "{fluid.author.componentGraph}",
         listeners: {
             "{fluid.author.componentView}.events.onRefreshView": {
                 // TODO: It's that big multiplicity problem again: https://issues.fluidproject.org/browse/FLUID-5948
@@ -837,13 +710,9 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
                 func: "{that}.events.onRefreshView.fire",
                 args: "{that}"
             }
-        }
-    });
-
-    fluid.defaults("fluid.author.modelSyncingSICV", {
-        model: "{that}.modelSource.model",
-        components: {
-            modelSource: "fluid.mustBeOverridden"
+        },
+        events: {
+            invalidateLayout: "{fluid.author.componentGraph}.events.invalidateLayout"
         }
     });
 
@@ -857,88 +726,5 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             }
         }
     });
-
-    fluid.author.structureView.pullModel = function (structureView) {
-        // TODO: Some miraculous way of constructing zero-cost proxies, or else initialising this member through intelligent ginger flooding
-        var model = fluid.getForComponent(structureView, "pullModel")();
-        if (model !== undefined) {
-            var applier = fluid.getForComponent(structureView, "applier");
-            applier.change("", model);
-        }
-    };
-
-    fluid.author.structureView.reRender = function (structureView) {
-        // TODO: expansion point here for more graceful incremental markup generation
-        var newMarkup = structureView.renderInnerMarkup();
-        structureView.locate("mutableParent").replaceWith(newMarkup);
-    };
-
-    fluid.capitalizeFirstLetter = function (string) {
-        return string.charAt(0).toUpperCase() + string.slice(1);
-    };
-
-    fluid.author.structureView.primitiveToString = function (object) {
-        return object === undefined ? "undefined" : JSON.stringify(object);
-    };
-
-    fluid.author.structureView.modelToRowInfo = function (model, segs, expansionModel, depth, rows) {
-        var pushRow = function (rowInfo) {
-            rowInfo.depth = depth;
-            rowInfo.expanded = expansionModel !== undefined;
-            rowInfo.key = segs.length === 0 ? null : segs[segs.length - 1];
-            rows.push(rowInfo);
-        };
-        if (fluid.isPrimitive(model)) {
-            var modelRender = fluid.author.structureView.primitiveToString(model);
-            pushRow({
-                value: modelRender,
-                rowType: "primitive"
-            });
-        } else {
-            if (fluid.isArrayable(model)) {
-                pushRow({
-                    value: "Array[" + model.length + "]",
-                    rowType: "typeHeader"
-                });
-            } else {
-                pushRow({
-                    value: "Object",
-                    rowType: "typeHeader"
-                });
-            }
-            fluid.each(model, function (value, key) {
-                fluid.author.structureView.modelToRowInfo(value, segs.concat([key]), fluid.model.getSimple(expansionModel, key), depth + 1, rows);
-            });
-        }
-    };
-
-    fluid.author.structureView.renderInnerMarkup = function (model, markup, rowPaddingOffset) {
-        var rows = [];
-        fluid.author.structureView.modelToRowInfo(model, [], undefined, 0, rows);
-        var renderedRows = fluid.transform(rows, function (row) {
-            var renderElements = [
-                row.rowType === "typeHeader" ? (row.expanded ? markup.expanderOpen : markup.expanderClosed) : "",
-                (row.key === null ? "" : row.key + ": "),
-                row.value
-            ];
-            var terms = {
-                rowClass: "fl-structureView-row-" + row.rowType,
-                row: renderElements.join(""),
-                padding: row.depth * rowPaddingOffset + "em"
-            };
-            return fluid.stringTemplate(markup.rowMarkup, terms);
-        });
-        return renderedRows.join("");
-    };
-
-    fluid.author.structureView.renderMarkup = function (structureView, markup, renderInnerMarkup) {
-        // TODO: This pathway executes during startup - cannot use events
-        fluid.author.structureView.pullModel(structureView);
-        var rows = renderInnerMarkup(structureView.model, 0);
-        var containerMarkup = fluid.stringTemplate(markup.container, {
-            rows: rows
-        });
-        return containerMarkup;
-    };
 
 })(jQuery, fluid_2_0_0);
