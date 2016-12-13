@@ -70,8 +70,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         var dx = end[0] - start[0], dy = end[1] - start[1];
         return {
             length: Math.sqrt(dx * dx + dy * dy),
-            // pre-teen SVG API uses degrees
-            angle: Math.atan2(dy, dx) * 180 / Math.PI
+            angle: Math.atan2(dy, dx)
         };
     };
 
@@ -109,7 +108,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
                     terms: {
                         startX: "{that}.model.arrowGeometry.start.0",
                         startY: "{that}.model.arrowGeometry.start.1",
-                        angle: "{that}.model.arrowGeometry.angle"
+                        angle: 0
                     }
                 }
             },
@@ -119,7 +118,8 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
                     type: "fluid.transforms.free",
                     func: "fluid.author.svgArrow.renderArrowPoints",
                     args: ["{that}.model.arrowGeometry.width", "{that}.model.arrowGeometry.headWidth",
-                           "{that}.model.arrowGeometry.length", "{that}.model.arrowGeometry.headHeight"]
+                           "{that}.model.arrowGeometry.length", "{that}.model.arrowGeometry.headHeight",
+                           "{that}.model.arrowGeometry.angle"]
                 }
             }
         },
@@ -148,15 +148,21 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         }
     });
 
-    fluid.author.svgArrow.renderArrowPoints = function (width, headWidth, length, headHeight) {
+    fluid.author.svgArrow.renderArrowPoints = function (width, headWidth, length, headHeight, angle) {
         var w = width / 2,
             hw = headWidth / 2,
-            hp = length - headHeight;
+            hp = length - headHeight,
+            c = Math.cos(angle),
+            s = Math.sin(angle);
         var points = [
-            [0, -w], [0, w],
-            [hp, w], [hp, hw],
-            [length, 0],
-            [hp, -hw], [hp, -w]];
+            [-w / s, 0],
+            [w / s, 0],
+            [hp * c + w * s, hp * s - w * c],
+            [hp * c + hw * s, hp * s - hw * c],
+            [length * c, length * s],
+            [hp * c - hw * s, hp * s + hw * c],
+            [hp * c - w * s, hp * s + w * c]
+        ];
         return fluid.author.pointsToSVG(points);
     };
 
@@ -500,7 +506,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             return child === childComponent ? index : undefined;
         });
         return {
-            start: [parentLayout.left + parentLayout.width * (childIndex + 1) / (children.length + 1), parentLayout.top + parentLayout.height],
+            start: [parentLayout.left + parentLayout.width * (childIndex + 1) / (children.length + 1), parentLayout.top + parentLayout.height - 0.5],
             end: [sourceLayout.left + sourceLayout.width / 2, sourceLayout.top]
         };
     };
