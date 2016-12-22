@@ -203,7 +203,9 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         },
         ignorableGrades: {
             "instantiator": "fluid.instantiator",
-            "resolveRootComponent": "fluid.resolveRootComponent"
+            "resolveRootComponent": "fluid.resolveRootComponent",
+            // Hack to avoid endlessly self-reacting as the InlineEdit used by the structureView abuses the tree by creating standalone fluid.tooltip instances
+            "tooltip": "fluid.tooltip"
         },
         members: { // A map of raw component ids to the view peer which represents them - managed by DynamicComponentIndexer
             idToViewMember: {},

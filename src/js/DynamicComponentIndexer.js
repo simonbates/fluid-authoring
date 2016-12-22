@@ -18,6 +18,12 @@
     /** Maintains an index on a parent component of a collection of dynamic components which maps
      * the value held at some specified path on the dynamic component onto the component's member name
      * A piece of "proto-framework" which is a framework candidate.
+     *
+     * The usage is that this grade is applied as a mixin to the component to be indexed. This model
+     * thus precludes the same component from appearing in more than one index, as well as polluting its
+     * top-level options space with various spurious options. A better model would have the index itself
+     * as a component (eliminating two of the options), and broadcast the listeners to the targets via
+     * an IoCSS selector - this would require IoCSS to be updated in line with FLUID-5903 recursive contexts.
      */
 
     fluid.defaults("fluid.indexedDynamicComponent", {
