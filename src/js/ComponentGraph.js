@@ -613,7 +613,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         markup: {
             container: "<div class=\"fld-author-componentView\" targetId=\"%targetId\" ownId=\"%ownId\">%memberName<table>%childRows</table></div>",
             memberName: "<div class=\"fld-author-member\">%member</div>",
-            structureRow: "<tr class=\"%structureRowClass\"><td>%title</td><td class=\"%structureCellClass fl-structureCell\"></td></tr>"
+            structureRow: "<tr class=\"%structureRowClass\"><td class=\"%structureTitleClass\">%title</td><td class=\"%structureCellClass fl-structureCell\"></td></tr>"
         },
         invokers: {
             prepareGradeNames: "fluid.author.componentView.prepareGradeNames({that}.viewRecord.that)",
@@ -634,7 +634,8 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         var terms = {
             title: element.title,
             structureRowClass: "fld-author-" + elementKey + "Row",
-            structureCellClass: "fld-author-" + elementKey + "Cell"
+            structureCellClass: "fld-author-" + elementKey + "Cell",
+            structureTitleClass: "fld-author-" + elementKey + "Title"
         };
         var markup = fluid.getForComponent(componentView, "options.markup");
         var togo = {
@@ -659,6 +660,10 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             gradeNames: "fluid.author.modelSyncingSICV"
         };
         options.parentContainer = fluid.author.makeLocateFunc(containerHolder, "." + terms.structureCellClass);
+        options.selectors = {
+            // Pretty awful - this actually lies outside the structureView's container, but we bolt it on so we can animate it
+            title: fluid.author.makeLocateFunc(containerHolder, "." + terms.structureTitleClass)
+        };
         component.options = options;
         togo.components[elementKey + "Structure"] = component;
         return togo;
@@ -732,6 +737,18 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
                 listener: "fluid.author.structureView.pullModel",
                 args: ["{that}"]
             }
+        }
+    });
+
+    fluid.defaults("fluid.author.modelSyncingSICV", {
+        model: {
+            hostModel: "{that}.modelSource.model"
+        },
+        components: {
+            modelSource: "fluid.mustBeOverridden"
+        },
+        listeners: {
+            onHighlightChange: "{that}.highlightChange({that}.dom.title)"
         }
     });
 

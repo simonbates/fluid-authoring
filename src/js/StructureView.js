@@ -23,10 +23,16 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         // Clients must override this with an IoC reference to a view component in the scope of which browser event binding will occur
         bindingRootReference: "fluid.mustBeOverridden",
         selectors: {
-            mutableParent: ".fld-author-structureView-mutableParent"
+            mutableParent: ".fld-author-structureView-mutableParent",
+            // This is a "fake selector" that will not be operated by the DOM binder, but instead will be string templated by getRowPathElement
+            // Note that https://sites.google.com/site/chandrasekhardutta/home/jquery-performance-analysis-of-selectors suggests that this selector form helps a lot - or at least it did in the 70s!
+            findRowByPath: "td[data-structureView-rowPath=\"%rowPath\"]"
         },
         // The distance in ems that each successive nested level will be indented - should be the width of the dropdown triangle encoded in CSS
         rowPaddingOffset: 1.1,
+        highlightChanges: true,
+        highlightChangeColor: "rgb(255, 255, 100)",
+        highlightChangeDuration: 2000,
         markup: {
             container: "<table class=\"fld-author-structureView\" data-structureView-id=\"%componentId\"><tbody class=\"fld-author-structureView-mutableParent\">%rows</tbody></table>",
             rowMarkup: "<tr><td class=\"%rowClass\" style=\"padding-left: %padding\" data-structureView-rowPath=\"%rowPath\">%element</td></tr>",
@@ -39,7 +45,9 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             onRefreshView: null,
             // Fires upwards when component's bounds have changed
             invalidateLayout: null,
-            createValueComponent: null
+            createValueComponent: null,
+            // Fired when a change has occurred which will be highlighted
+            onHighlightChange: null
         },
         members: {
             // A lookup of model path to early row information (including valueId, the id in the DOM of the container for the value, and rowType)
@@ -70,7 +78,10 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             // Cannot be event-driven since may operate during startup
             pullModel: "fluid.identity()",
             createValueComponents: "fluid.author.structureView.createValueComponents({that})",
-            hostModelChanged: "fluid.author.structureView.hostModelChanged({that}, {arguments}.0, {arguments}.1)"
+            hostModelChanged: "fluid.author.structureView.hostModelChanged({that}, {arguments}.0, {arguments}.1)",
+            // Fired with a jQuery which will be animated to indicate it represents a changed value
+            highlightChange: "fluid.author.structureView.highlightChange({that}, {arguments}.0)",
+            getRowPathElement: "fluid.author.structureView.getRowPathElement({that}, {arguments}.0)"
         },
         listeners: {
             "onRefreshView.render": "{that}.updateInnerMarkup",
@@ -116,11 +127,56 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         return togo;
     };
 
+    fluid.author.getAttribute = function (element, attribute) {
+        return element.getAttribute ? element.getAttribute(attribute) : null;
+    };
+
+    // Approach mirroring https://shoehornwithteeth.com/ramblings/2014/02/compute-a-dom-elements-effective-background-colour/
+    fluid.author.getBackgroundColor = function (element) {
+        var property = window.getComputedStyle(element).backgroundColor;
+        return property === "rgba(0, 0, 0, 0)" ? null : property;
+    };
+
+    fluid.author.findParentAttribute = function (element, getter) {
+        var parent = fluid.findAncestor(element, getter);
+        return parent ? getter(parent) : parent;
+    };
+
     // Parses an rgb color string as dispensed from the browser's computed color styles (rgba values will be accepted, but the transparency value will be discarded)
     // Return an array of numbers
     fluid.author.parseRGB = function (rgbString) {
-        var rgb = rgbString.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*(\d+))?\)$/);
+        var rgb = rgbString.match(/^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,\s*(\d?(?:\.\d+)?)\s*)?\)$/);
         return [+rgb[1], +rgb[2], +rgb[3]];
+    };
+
+    fluid.author.structureView.getRowPathElement = function (structureView, rowPath) {
+        var findRowByPath = structureView.options.selectors.findRowByPath;
+        var expanded = fluid.stringTemplate(findRowByPath, {
+            rowPath: fluid.author.escapePathForAttribute(rowPath)
+        });
+        return structureView.container.find(expanded);
+    };
+
+    // Strategy note: evaluated the jQuery UI Color plugin https://api.jqueryui.com/color-animation/ but it feels that 700 lines of code
+    // is too much to bring in just for some color animations! However, it does seem desirable to integrate with the standard jQuery
+    // scheme for animations, with all its infrastructure for queuing, configuration and cancellation, etc. Therefore we animate
+    // a custom, synthetic property named "highlightProgress" between 0 and 2 and perform the actual update in manual code.
+    fluid.author.structureView.highlightChange = function (structureView, element) {
+        var backColor = fluid.author.findParentAttribute(element, fluid.author.getBackgroundColor);
+        fluid.log("back color " + backColor);
+        var startColor = fluid.author.parseRGB(backColor);
+        var endColor = fluid.author.parseRGB(structureView.options.highlightChangeColor);
+        element.animate({"highlightProgress": 1}, {
+            easing: "linear",
+            duration: structureView.options.highlightChangeDuration,
+            step: function (progress) {
+                endColor[3] = 1 - progress;
+                element.css({backgroundColor: "rgba(" + endColor.join(", ") + ")"});
+            },
+            complete: function () {
+                element[0].highlightProgress = 0;
+            }
+        });
     };
 
     fluid.author.structureView.updateLeafValue = function (structureView, valueComponent, path, newValue) {
@@ -129,37 +185,65 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         valueComponent.updateModelValue(rendered, "structureView");
     };
 
+    fluid.author.getChangeMap = function (newValue, oldValue) {
+        var diffOptions = {changes: 0, unchanged: 0, changeMap: {}}; // TODO: Stupid undocumented diff options format
+        fluid.model.diff(newValue, oldValue, diffOptions);
+        return diffOptions.changeMap;
+    };
+
+    // We determine that there has been a structural change requiring complete rerendering if there is a creation or removal of
+    // a direct child of an expanded row
+    // Should only be called with changeMapValue which is of type Object
+    fluid.author.expandedChildChange = function (changeMapValue) {
+        return fluid.find(changeMapValue, function (value) {
+            return typeof(value) === "string" ? true : undefined;
+        }, false);
+    };
+
     fluid.author.structureView.hostModelChanged = function (structureView, newModel, oldModel) {
         fluid.log("HOST MODEL CHANGED for ", structureView, " new model ", newModel, " old model ", oldModel);
+        var changeMap = fluid.author.getChangeMap(newModel, oldModel);
         var changedLeafMap = {};
         var globalInvalidation = false;
+        var changedRowPaths = [];
         fluid.each(structureView.pathToRowInfo, function (rowInfo, path) {
-            var oldValue = fluid.get(oldModel, path);
-            var newValue = fluid.get(newModel, path);
+            var changeMapValue = fluid.get(changeMap, path);
+            if (changeMapValue) {
+                changedRowPaths.push(path);
+            }
             if (rowInfo.rowType === "primitive") {
-                if (oldValue !== newValue) {
-                    changedLeafMap[path] = newValue;
+                if (changeMapValue) {
+                    changedLeafMap[path] = true;
                 }
             } else { // it is "rowHeader" for a complex value
-                if (fluid.typeCode(oldValue) !== fluid.typeCode(newValue)) {
+                if (typeof(changeMapValue) === "string") {
                     fluid.log("Change of type code, global invalidation");
                     globalInvalidation = true;
                 } else {
-                    var isExpanded = fluid.get(structureView.model, "expansionModel." + path);
-                    if (isExpanded) {
-                        globalInvalidation = fluid.author.structureView.expandedChildChange(newModel, oldModel);
+                    if (rowInfo.expanded) {
+                        globalInvalidation = fluid.author.expandedChildChange(changeMapValue);
                     }
                 }
             }
         });
-        if (globalInvalidation) {
+        if (globalInvalidation) { // TODO: One day we will track such changes more finely, and highlight appropriately, etc.
             structureView.updateInnerMarkup();
         } else {
-            fluid.each(changedLeafMap, function (newValue, path) {
+            fluid.each(changedLeafMap, function (troo, path) {
+                var newValue = fluid.get(newModel, path);
                 fluid.log("UPDATING leaf value at path " + path + " to " + newValue);
                 var valueComponent = structureView[structureView.pathToValueComponent[path]];
                 fluid.author.structureView.updateLeafValue(structureView, valueComponent, path, newValue);
             });
+            if (structureView.options.highlightChanges) {
+                fluid.each(changedRowPaths, function (path) {
+                    var rowPathElement = structureView.getRowPathElement(path);
+                    structureView.highlightChange(rowPathElement);
+                });
+                if (changedRowPaths.length > 0) {
+                    structureView.events.onHighlightChange.fire(structureView);
+                }
+            }
         }
     };
 
@@ -191,33 +275,27 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         }
     });
 
-    fluid.author.getAttribute = function (element, attribute) {
-        return element.getAttribute ? element.getAttribute(attribute) : null;
-    };
-
-    // Approach mirroring https://shoehornwithteeth.com/ramblings/2014/02/compute-a-dom-elements-effective-background-colour/
-    fluid.author.getBackgroundColor = function (element) {
-        var property = window.getComputedStyle(element).backgroundColor;
-        return property === "rgba(0, 0, 0, 0)" ? null : property;
-    };
-
-    fluid.author.findParentAttribute = function (element, getter) {
-        var parent = fluid.findAncestor(element, getter);
-        return parent ? getter(parent) : parent;
-    };
-
     fluid.author.structureView.findComponent = function (element, getter) {
         var id = fluid.author.findParentAttribute(element, getter);
         return id ? fluid.globalInstantiator.idToShadow[id].that : null;
     };
 
+    // Escape a model path into a form suitable to appear as an HTML attribute - the path "" is represented as "."
+    fluid.author.escapePathForAttribute = function (path) {
+        return path === "" ? "." : path;
+    };
+
+    // Undo the effect of escapePathForAttribute
+    fluid.author.unescapePathForAttribute = function (path) {
+        return path === "." ? "" : path;
+    };
+
     fluid.author.structureViewBinder.expanderClick = function (event, structureViewBinder) {
         // YEAH WE HAVE DONE THIS GARBAGE AND INSTANCE-FREE (minus the path construction/parsing)
         var structureView = fluid.author.structureView.findComponent(event.target, structureViewBinder.findStructureView);
-        var rowPath = fluid.author.findParentAttribute(event.target, structureViewBinder.findRowPath);
+        var rowPath = fluid.author.unescapePathForAttribute(fluid.author.findParentAttribute(event.target, structureViewBinder.findRowPath));
         fluid.log("Received expander click for component ", structureView, " row path ", rowPath);
-        // Note that rowPath has received prefix "." to allow transport through attribute
-        var expansionPath = "expansionModel" + (rowPath === "." ? "" : rowPath);
+        var expansionPath = rowPath === "" ? "expansionModel" : "expansionModel." + rowPath;
         var isExpanded = fluid.get(structureView.model, expansionPath);
         if (isExpanded) {
             structureView.applier.change(expansionPath, undefined, "DELETE");
@@ -230,15 +308,6 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         var bindingContainer = structureViewBinder.options.bindingRootElement;
         bindingContainer.on("click", ".fl-author-expander", structureViewBinder.expanderClick);
     };
-
-    fluid.defaults("fluid.author.modelSyncingSICV", {
-        model: {
-            hostModel: "{that}.modelSource.model"
-        },
-        components: {
-            modelSource: "fluid.mustBeOverridden"
-        }
-    });
 
     fluid.author.structureView.pullModel = function (structureView) {
         // TODO: Some miraculous way of constructing zero-cost proxies, or else initialising this member through intelligent ginger flooding
@@ -266,6 +335,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     };
 
     // Model is the local model, expansionModel is the full expansion model
+    // We construct "rowInfo" records since we can't really bear the thought of constructing a full component for each one
     fluid.author.structureView.modelToRowInfo = function (model, segs, expansionModel, depth, rows) {
         var isExpanded = fluid.get(expansionModel, segs);
         var pushRow = function (rowInfo) {
@@ -316,33 +386,11 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         strings: {
             defaultViewText: ""
         },
-        listeners: {
-            modelChanged: "fluid.author.structureViewValue.highlightChange({structureViewValue})"
-        },
-        highlightChangeColor: "rgb(255, 255, 100)",
-        highlightChangeDuration: 1000,
         // Horrifically bugged since these just accumulate endlessly
         useTooltip: false
     });
 
-    fluid.author.structureViewValue.highlightChange = function (structureViewValue) {
-        var backColor = fluid.author.findParentAttribute(structureViewValue.container, fluid.author.getBackgroundColor);
-        fluid.log("back color " + backColor);
-        var startColor = fluid.author.parseRGB(backColor);
-        var endColor = fluid.author.parseRGB(structureViewValue.options.highlightChangeColor);
-        structureViewValue.container.animate({"highlightProgress": 1}, {
-            easing: "linear",
-            duration: structureViewValue.options.highlightChangeDuration,
-            step: function (progress) {
-                fluid.log("progress is ", progress);
-                endColor[3] = 1 - progress;
-                structureViewValue.container.css({backgroundColor: "rgba(" + endColor.join(", ") + ")"});
-            },
-            complete: function () {
-                structureViewValue.container[0].highlightProgress = 0;
-            }
-        });
-    };
+
 
     fluid.author.structureView.createValueComponents = function (structureView) {
         fluid.each(structureView.pathToValueComponent, function (valueComponentName) {
@@ -378,7 +426,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
                 rowClass: "fl-structureView-row-" + row.rowType,
                 element: element,
                 // encoding hack to allow transporting empty path through system
-                rowPath: fluid.XMLEncode("." + row.path),
+                rowPath: fluid.XMLEncode(fluid.author.escapePathForAttribute(row.path)),
                 padding: row.depth * rowPaddingOffset + "em"
             };
             return fluid.stringTemplate(markup.rowMarkup, terms);
