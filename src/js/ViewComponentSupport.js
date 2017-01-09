@@ -73,8 +73,16 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
 
     fluid.defaults("fluid.author.domSizing", {
         modelListeners: {
-            "layout.width":  "fluid.author.numberToCSS({that}.container, {change}.value, width)",
-            "layout.height": "fluid.author.numberToCSS({that}.container, {change}.value, height)"
+            "layout.width": {
+                funcName: "fluid.author.numberToCSS",
+                args: ["{that}.container", "{change}.value", "width"],
+                excludeSource: "DOM"
+            },
+            "layout.height": {
+                funcName: "fluid.author.numberToCSS",
+                args: ["{that}.container", "{change}.value", "height"],
+                excludeSource: "DOM"
+            }
         }
     });
 
@@ -90,7 +98,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         that.applier.change("layout", {
             width: width,
             height: height
-        });
+        }, "ADD", "DOM");
     };
 
     // SVG support

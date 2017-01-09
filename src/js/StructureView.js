@@ -16,7 +16,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     // NEW current plan: Subcomponents such as this will render strictly later than the construct-time of the parent. Therefore we HOPE
     // that their construct-time rendering can bind to the already rendered "parentContainer" produced by "elements".
     fluid.defaults("fluid.author.structureView", {
-        gradeNames: ["fluid.newViewComponent", "fluid.author.containerRenderingView"],
+        gradeNames: ["fluid.newViewComponent", "fluid.author.containerRenderingView", "fluid.author.domReadBounds"],
         mergePolicy: {
             bindingRootReference: "noexpand"
         },
@@ -65,6 +65,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         },
         model: {
             // hostModel: maps the model area proper which is being imaged
+            // layout: updated by domReadBounds
             expansionModel: null,
             rowCount: 0
         },
@@ -100,7 +101,10 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
                 func: "{that}.updateInnerMarkup",
                 excludeSource: "init"
             },
-            rowCount: "{that}.events.invalidateLayout.fire",
+            layout: {
+                func: "{that}.events.invalidateLayout.fire",
+                includeSource: "DOM"
+            },
             hostModel: {
                 func: "{that}.hostModelChanged",
                 args: ["{change}.value", "{change}.oldValue"],
@@ -166,6 +170,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         fluid.log("back color " + backColor);
         var startColor = fluid.author.parseRGB(backColor);
         var endColor = fluid.author.parseRGB(structureView.options.highlightChangeColor);
+        element.stop(true, true);
         element.animate({"highlightProgress": 1}, {
             easing: "linear",
             duration: structureView.options.highlightChangeDuration,
@@ -183,6 +188,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         // ABSURD that InlineEdit doesn't participate in any model relationship (FLUID-6098)
         var rendered = fluid.author.structureView.primitiveToString(newValue);
         valueComponent.updateModelValue(rendered, "structureView");
+        structureView.readBounds();
     };
 
     fluid.author.getChangeMap = function (newValue, oldValue) {
@@ -203,6 +209,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     fluid.author.structureView.hostModelChanged = function (structureView, newModel, oldModel) {
         fluid.log("HOST MODEL CHANGED for ", structureView, " new model ", newModel, " old model ", oldModel);
         var changeMap = fluid.author.getChangeMap(newModel, oldModel);
+        fluid.log("changeMap: ", changeMap);
         var changedLeafMap = {};
         var globalInvalidation = false;
         var changedRowPaths = [];
@@ -323,6 +330,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         if (structureView.dom) {
             var newMarkup = structureView.renderInnerMarkup();
             structureView.locate("mutableParent").html(newMarkup);
+            structureView.readBounds();
         }
     };
 

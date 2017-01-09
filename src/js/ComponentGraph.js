@@ -419,10 +419,10 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             }
             // Start at the extreme position for the window containing all of our children
             var childLeft = view.model.layout.left + (view.model.layout.width - shadow.childrenWidth) / 2;
-            fluid.log("Considering component " + shadow.that.id + " at path " + shadow.path + " with " + fluid.keys(shadow.memberToChild).length + " children");
-            fluid.log("Own view has id " + view.id + ", left of " + view.model.layout.left + " childrenWidth is " + shadow.childrenWidth + " starting childLeft at " + childLeft);
-            fluid.each(shadow.memberToChild, function (child, member) {
-                fluid.log("Considering member " + member);
+            // fluid.log("Considering component " + shadow.that.id + " at path " + shadow.path + " with " + fluid.keys(shadow.memberToChild).length + " children");
+            // fluid.log("Own view has id " + view.id + ", left of " + view.model.layout.left + " childrenWidth is " + shadow.childrenWidth + " starting childLeft at " + childLeft);
+            fluid.each(shadow.memberToChild, function (child /*, member */) {
+                // fluid.log("Considering member " + member);
                 var childShadow = componentGraph.idToShadow[child.id];
                 var childView = componentGraph.idToView(child.id);
                 if (!childView) { // It may be still in creation
@@ -434,7 +434,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
                     left: thisChildLeft,
                     top: view.model.layout.top + rowHeights[record.rowIndex] + o.verticalGap
                 });
-                fluid.log("Assigned left of " + childLeft + " to target component id " + child.id + " view id " + childView.id);
+                // fluid.log("Assigned left of " + childLeft + " to target component id " + child.id + " view id " + childView.id);
                 rootLayout.height = childView.model.layout.top + rowHeights[record.rowIndex + 1] + o.verticalGap;
                 childLeft += childShadow.childrenWidth + o.horizontalGap;
             });
