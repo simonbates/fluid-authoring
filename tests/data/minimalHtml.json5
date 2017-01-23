@@ -1,0 +1,68 @@
+{
+  children: [
+    {
+      text: "<!DOCTYPE html>"
+    },
+    {
+      tagName: "html",
+      children: [
+        {
+          tagName: "head",
+          children: [
+            {
+              tagName: "meta",
+              attrs: {
+                "http-equiv": "Content-Type",
+                content: "text/html; charset=utf-8"
+              }
+            },
+            {
+              tagName: "title",
+              children: [
+                {
+                  text: "HTML Parser Tests"
+                }
+              ]
+            },
+            {
+              tagName: "link",
+              attrs: {
+                rel: "stylesheet",
+                media: "screen",
+                href: "../../node_modules/infusion/tests/lib/qunit/css/qunit.css"
+              }
+            },
+            {
+              tagName: "script",
+              attrs: {
+                src: "../js/testHtmlParser.js"
+              }
+            }
+          ]
+        },
+        {
+          tagName: "body",
+          attrs: {
+            id: "body"
+          },
+          children: [
+            {
+              tagName: "h1",
+              attrs: {
+                id: "qunit-header"
+              },
+              children: [
+                {
+                  text: "HTML Parser Tests"
+                }
+              ]
+            },
+            {
+              text: "<!-- Test HTML -->"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

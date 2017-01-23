@@ -6,8 +6,9 @@
     "bugs": "http://issues.fluidproject.org/browse/FLUID",
     "homepage": "http://www.fluidproject.org/",
     "dependencies": {
-        "infusion": "amb26/infusion#FLUID-6091",
-        "chartAuthoring": "amb26/chartAuthoring#FLOE-484"
+        "infusion": "2.0.0-dev.20161219T170555Z.5778f7e",
+        "chartAuthoring": "amb26/chartAuthoring#FLOE-484",
+        "gpii-nexus": "0.1.0"
     },
     "license": "(BSD-3-Clause OR ECL-2.0)",
     "keywords": [

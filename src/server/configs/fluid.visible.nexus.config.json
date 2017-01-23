@@ -1,0 +1,18 @@
+{
+    "type": "fluid.visible.nexus.config",
+    "options": {
+        "components": {
+            "server": {
+                "type": "kettle.server",
+                "options": {
+                    "components": {
+                        "authoring": {
+                            "type": "fluid.authoring.nexus.app"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "mergeConfigs": "%gpii-nexus/configs/gpii.nexus.config.json"
+}
