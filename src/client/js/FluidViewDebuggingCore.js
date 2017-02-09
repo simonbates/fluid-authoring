@@ -73,6 +73,28 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
 
     fluid.author.popupPanel.renderMarkup = function (that, holderMarkup, paneMarkup) {
         that.container.append(holderMarkup);
+        fluid.author.panePanel.renderMarkup(that, paneMarkup);
+    };
+
+
+    // Do-nothing alternative to fluid.author.popupPanel
+    fluid.defaults("fluid.author.panePanel", {
+        events: {
+            onMarkupReady: null
+        },
+        selectors: {
+            pane: ""
+        },
+        listeners: {
+            "onCreate.render": {
+                priority: "first",
+                funcName: "fluid.author.panePanel.renderMarkup",
+                args: ["{that}", "{that}.options.markup.pane"]
+            }
+        }
+    });
+
+    fluid.author.panePanel.renderMarkup = function (that, paneMarkup) {
         var pane = that.locate("pane");
         pane.append(paneMarkup);
         that.events.onMarkupReady.fire();

@@ -12,17 +12,14 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     fluid.setLogging(true);
 
     fluid.defaults("fluid.author.componentGraphPanel", {
-        gradeNames: "fluid.author.popupPanel",
-        markup: {
-            pane: "<div class=\"fld-author-componentGraphHolder\"><div class=\"fld-author-componentGraph\"></div></div>"
-        },
+        gradeNames: "fluid.viewComponent",
         selectors: {
-            componentGraphHolder: ".fld-author-componentGraphHolder",
+            componentGraphHolder: ".flc-author-componentGraphHolder",
             componentGraph: ".fld-author-componentGraph"
         },
         components: {
             graph: {
-                type: "fluid.author.componentGraph.local",
+                type: "fluid.author.componentGraph",
                 container: "{componentGraphPanel}.dom.componentGraph",
                 options: {
                     gradeNames: "fluid.author.componentGraphSVGArrows",
@@ -37,6 +34,20 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
                 },
                 createOnEvent: "onMarkupReady"
             }
+        }
+    });
+
+    fluid.defaults("fluid.author.componentGraphPanel.popup", {
+        gradeNames: ["fluid.author.popupPanel", "fluid.author.componentGraphPanel"],
+        markup: {
+            pane: "<div class=\"flc-author-componentGraphHolder fl-author-scrollingPane\"><div class=\"fld-author-componentGraph\"></div></div>"
+        }
+    });
+
+    fluid.defaults("fluid.author.componentGraphPanel.fullFrame", {
+        gradeNames: ["fluid.author.panePanel", "fluid.author.componentGraphPanel"],
+        markup: {
+            pane: "<div class=\"flc-author-componentGraphHolder\"><div class=\"fld-author-componentGraph\"></div></div>"
         }
     });
 
@@ -215,7 +226,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             pathToId: {} // TODO move to model after checking escaping
         },
         modelListeners: {
-            createComponentView: {
+            updateComponentView: {
                 path: "idToPath.*",
                 funcName: "fluid.author.componentGraph.updateComponentView",
                 args: ["{that}", "{change}.path", "{change}.value"]
@@ -261,34 +272,19 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         dynamicIndexTarget: "{fluid.author.componentGraph}"
     });
 
-    // A variety of componentGraph which binds to the local instantiator
 
-    fluid.defaults("fluid.author.componentGraph.local", {
-        gradeNames: ["fluid.author.componentGraph"],
-        listeners: {
-            "onCreate.populateComponents": "fluid.author.componentGraph.populateLocalComponents",
-            "{instantiator}.events.onComponentAttach": {
-                funcName: "fluid.author.componentGraph.componentAttach",
-                args: ["{that}", "{arguments}.0", "{arguments}.1", "{arguments}.3"] // component, path, created
-            },
-            "{instantiator}.events.onComponentClear": {
-                funcName: "fluid.author.componentGraph.componentClear",
-                args: ["{that}", "{arguments}.0", "{arguments}.1", "{arguments}.3"] // component, path, created
-            }
-        }
-    });
 
     /** Accepts a (concrete) path into the target component tree and parses it into a collection of useful pre-geometric info,
      * including the path, reference and shadow of its parent, and member name within it
      * @param componentGraph {componentGraph} A componentGraph component
      * @param path {String} The string form of a concrete component path in its tree
      * @return {Object} A structure of pre-geometric info:
-     *    parsed,
-     *    parentSegs,
-     *    memberName,
-     *    parentPath,
-     *    parentId
-     *    parentShadow
+     *    parsed {Array of String}: Array of path segments of component in tree
+     *    parentSegs {Array of String}: Array of path segments of component's parent in tree
+     *    memberName {String}: Component's name in its parent, or `undefined` if this is the root component
+     *    parentPath {String}: If the component is not the root component, the string form of its parent's path
+     *    parentId {String}: If the component is not the root component, the id of its parent
+     *    parentShadow {Object}: If the component is not the root component, its parent shadow record
      */
     fluid.author.componentGraph.getCoordinates = function (componentGraph, path) {
         var instantiator = fluid.globalInstantiator;
@@ -318,19 +314,10 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         return togo;
     };
 
-    fluid.author.componentGraph.isIgnorableComponent = function (componentGraph, coords, that) {
-        var isIgnorablePath = fluid.find_if(componentGraph.options.ignorableRoots, function (ignorableRoot) {
-            return fluid.author.isPrefix(ignorableRoot, coords.parsed);
-        });
-        var isIgnorableGrade = fluid.find_if(componentGraph.options.ignorableGrades, function (ignorableGrade) {
-            return fluid.hasGrade(that.options, ignorableGrade) || that.typeName === ignorableGrade;
-        });
-        return isIgnorablePath || isIgnorableGrade;
-    };
-
-    fluid.author.componentGraph.mapComponent = function (componentGraph, id, shadow) {
+    fluid.author.componentGraph.mapComponent = function (componentGraph, shadow) {
+        var id = shadow.that.id;
         var coords = fluid.author.componentGraph.getCoordinates(componentGraph, shadow.path);
-        if (!fluid.author.componentGraph.isIgnorableComponent(componentGraph, coords, shadow.that)) {
+        if (fluid.author.componentGraph.isIncludedComponent(componentGraph.options, coords, shadow.that)) {
             componentGraph.idToShadow[id] = shadow;
             componentGraph.pathToId[shadow.path] = id;
             if (coords.parentShadow) {
@@ -340,32 +327,22 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         }
     };
 
-    fluid.author.componentGraph.populateLocalComponents = function (that) {
-        var instantiator = fluid.globalInstantiator;
-        var idToShadow = instantiator.idToShadow;
-        fluid.each(idToShadow, function (shadow, id) {
-            fluid.author.componentGraph.mapComponent(that, id, shadow);
-        });
-    };
-
-    fluid.author.componentGraph.componentAttach = function (that, component, path, created) {
-        if (created) {
-            var shadow = fluid.globalInstantiator.idToShadow[component.id];
-            fluid.author.componentGraph.mapComponent(that, component.id, shadow);
+    fluid.author.componentGraph.unmapComponent = function (componentGraph, shadow) {
+        var id = shadow.that.id,
+            path = shadow.path;
+        delete componentGraph.idToShadow[id];
+        delete componentGraph.pathToId[path];
+        var coords = fluid.author.componentGraph.getCoordinates(componentGraph, path);
+        if (coords.parentShadow) {
+            delete coords.parentShadow.memberToChild[coords.memberName];
         }
-    };
-
-    fluid.author.componentGraph.componentClear = function (that, component, path, created) {
-        if (created) {
-            var shadow = fluid.globalInstantiator.idToShadow[component.id];
-            delete that.idToShadow[component.id];
-            delete that.pathToId[path];
-            var coords = fluid.author.componentGraph.getCoordinates(that, shadow.path);
-            if (coords.parentShadow) {
-                delete coords.parentShadow.memberToChild[coords.memberName];
-            }
-            that.applier.change(["idToPath", component.id], null, "DELETE");
-        }
+        componentGraph.applier.change(["idToPath", id], null, "DELETE");
+        // TODO: Hack to compensate for FLUID-6127
+        console.log("Unmapped component at path " + path + " id " + id);
+        console.log("idToPath is now ", componentGraph.model.idToPath);
+        var viewComponent = componentGraph.idToView(id);
+        viewComponent.destroy();
+        componentGraph.events.invalidateLayout.fire();
     };
 
     // Sorts more nested views to the front
@@ -481,6 +458,10 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
                 end: "{that}.model.arrowLayout.end"
             }
         },
+        listeners: {
+            "{sourceView}.events.onDestroy": "{that}.destroy",
+            "{parentView}.events.onDestroy": "{that}.destroy"
+        },
         modelRelay: {
             arrowLayout: {
                 target: "arrowLayout",
@@ -530,9 +511,11 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
      */
     fluid.author.componentGraph.updateComponentView = function (componentGraph, idPath, path) {
         var id = idPath[1]; // segment 0 is "idToPath"
+        console.log("UpdateComponentView with path " + path);
         if (path === undefined) {
             var viewComponent = componentGraph.idToView(id);
             viewComponent.destroy();
+            componentGraph.events.invalidateLayout.fire();
         } else {
             fluid.invokeLater(function () {
                 fluid.log("Firing createComponentView for path " + path + " id " + id);
@@ -582,9 +565,13 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     };
 
     fluid.defaults("fluid.author.componentView", {
-        gradeNames: ["fluid.newViewComponent", "fluid.author.containerRenderingView", "fluid.indexedDynamicComponent", "fluid.author.domPositioning", "fluid.author.domReadBounds"],
+        gradeNames: ["fluid.newViewComponent", "fluid.decoratorViewComponent", "fluid.author.containerRenderingView",
+            "fluid.indexedDynamicComponent", "fluid.author.domPositioning", "fluid.author.domReadBounds"],
         mergePolicy: {
             elements: "noexpand"
+        },
+        domReadBounds: {
+            height: "element"
         },
         distributeOptions: {
             // This unreasonable hack is currently our best route around FLUID-5028
@@ -610,13 +597,24 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         events: { // Currently we paint ourselves on creation and so there are no local listeners
             onRefreshView: null
         },
+        selectors: {
+            destroyButton: ".fld-author-destroy"
+        },
+        decorators: {
+            destroyButton: {
+                type: "jQuery",
+                method: "click",
+                args: "{componentGraph}.destroyTargetComponent({that}.viewRecord.that)"
+            }
+        },
         markup: {
-            container: "<div class=\"fld-author-componentView\" targetId=\"%targetId\" ownId=\"%ownId\">%memberName<table>%childRows</table></div>",
+            container: "<div class=\"fld-author-componentView\" targetId=\"%targetId\" ownId=\"%ownId\">%memberName%destroyButton<table>%childRows</table></div>",
             memberName: "<div class=\"fld-author-member\">%member</div>",
+            destroyButton: "<div class=\"fld-author-destroy\"></div>",
             structureRow: "<tr class=\"%structureRowClass\"><td class=\"%structureTitleClass\">%title</td><td class=\"%structureCellClass fl-structureCell\"></td></tr>"
         },
         invokers: {
-            prepareGradeNames: "fluid.author.componentView.prepareGradeNames({that}.viewRecord.that)",
+            prepareGradeNames: "fluid.author.componentView.prepareGradeNames({componentGraph}.renderGradeName, {that}.viewRecord.that)",
             renderMarkup: "fluid.author.componentView.renderMarkup({componentGraph}, {that}, {that}.viewRecord.that, {that}.options.markup, {that}.options.rowMaterials.rowsMarkup)",
             renderMemberName: "fluid.author.componentView.renderMemberName({componentGraph}, {that}, {that}.viewRecord.that, {that}.options.markup)"
         }
@@ -690,6 +688,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     fluid.author.componentView.renderMarkup = function (componentGraph, componentView, that, markupBlock, rowsMarkup) {
         var containerModel = {
             memberName: fluid.getForComponent(componentView, "renderMemberName")(),
+            destroyButton: markupBlock.destroyButton,
             childRows: rowsMarkup,
             targetId: that.id,
             ownId: componentView.id
@@ -704,10 +703,11 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         return coords.memberName === undefined ? "" : fluid.stringTemplate(markupBlock.memberName, {member: coords.memberName});
     };
 
-    fluid.author.componentView.prepareGradeNames = function (targetComponent) {
+    fluid.author.componentView.prepareGradeNames = function (renderGradeName, targetComponent) {
         var gradeNames = [targetComponent.typeName].concat(fluid.makeArray(fluid.get(targetComponent, ["options", "gradeNames"])));
         var filteredGrades = fluid.author.filterGrades(gradeNames, fluid.author.ignorableGrades);
-        var finalGrades = fluid.author.dedupeGrades(filteredGrades);
+        var dedupedGrades = fluid.author.dedupeGrades(filteredGrades);
+        var finalGrades = fluid.transform(dedupedGrades, renderGradeName);
         return finalGrades;
     };
 

@@ -334,10 +334,6 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         }
     };
 
-    fluid.capitalizeFirstLetter = function (string) {
-        return string.charAt(0).toUpperCase() + string.slice(1);
-    };
-
     fluid.author.structureView.primitiveToString = function (object) {
         return object === undefined ? "undefined" : JSON.stringify(object);
     };

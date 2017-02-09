@@ -47,7 +47,15 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         },
         container: "@expand:fluid.author.renderContainer({that}, {that}.renderMarkup, {that}.options.parentContainer)",
         // The DOM element which to which this component should append its markup on startup
-        parentContainer: "fluid.notImplemented" // must be overridden
+        parentContainer: "fluid.notImplemented", // must be overridden
+        listeners: {
+            "onDestroy.removeMarkup": {
+                "this": "{that}.container",
+                method: "remove",
+                args: [],
+                priority: "last"
+            }
+        }
     });
 
     fluid.defaults("fluid.author.containerSVGRenderingView", {
@@ -86,18 +94,45 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         }
     });
 
+    // Will read the DOM bounds into model fields layout.width, layout.height using one of two strategies -
+    // "full" will read all child nodes and compute the bounding box which covers all of their actual positions
+    // "element" will just use the standard outerWidth/outerHeight dimensions supplied by jQuery
     fluid.defaults("fluid.author.domReadBounds", {
+        domReadBounds: {
+            width: "full", // or "element"
+            height: "full"
+        },
         invokers: {
             readBounds: "fluid.author.domReadBounds.readBounds({that})"
         }
     });
 
+    /** Compute the minimum bounding rectangle covering all of an array of rectangles, with fields `left`, `right`,
+     * `bottom` and `top`.
+     * @param rects {Array of Rectangle} An array of rectangles
+     * @return {Rectangle} The minimum rectangle bounding all of the supplied rectangle
+     */
+    fluid.author.boundingRect = function (rects) {
+        return {
+            left: Math.min.apply(null, fluid.getMembers(rects, "left")),
+            right: Math.max.apply(null, fluid.getMembers(rects, "right")),
+            bottom: Math.max.apply(null, fluid.getMembers(rects, "bottom")),
+            top: Math.min.apply(null, fluid.getMembers(rects, "top"))
+        };
+    };
+
     fluid.author.domReadBounds.readBounds = function (that) {
         var width = that.container.outerWidth();
         var height = that.container.outerHeight();
+        var childRects = fluid.transform(that.container.children(), function (child) {
+            return child.getBoundingClientRect();
+        });
+        var bounds = fluid.author.boundingRect(childRects);
+        var fullWidth = that.options.domReadBounds.width === "full",
+            fullHeight = that.options.domReadBounds.height === "full";
         that.applier.change("layout", {
-            width: width,
-            height: height
+            width: fullWidth ? bounds.right - bounds.left : width,
+            height: fullHeight ? bounds.bottom - bounds.top : height
         }, "ADD", "DOM");
     };
 

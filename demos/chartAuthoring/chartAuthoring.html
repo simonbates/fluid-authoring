@@ -72,13 +72,15 @@
         
         <!-- Below here: definitions for the authoring environment -->
 
-        <script src="../../src/client/js/AuthorUtils.js"></script>
+        <script src="../../src/shared/js/AuthorUtils.js"></script>
+        <script src="../../src/shared/js/ComponentGraphUtilities.js"></script>
         <script src="../../src/client/js/DecoratorViewComponent.js"></script>
         <script src="../../src/client/js/FluidViewDebuggingCore.js"></script>
         <script src="../../src/client/js/ViewComponentSupport.js"></script>
         <script src="../../src/client/js/DynamicComponentIndexer.js"></script>
         <script src="../../src/client/js/StructureView.js"></script>
         <script src="../../src/client/js/ComponentGraph.js"></script>
+        <script src="../../src/client/js/ComponentGraphLocal.js"></script>
 
         <link rel="stylesheet" type="text/css" href="../../src/client/css/ComponentGraph.css" />
 
@@ -99,7 +101,7 @@
                         }
                     });
                     
-                    fluid.author.componentGraphPanel("body");
+                    fluid.author.componentGraphPanel.popup("body");
                 </script>
             </div>
 

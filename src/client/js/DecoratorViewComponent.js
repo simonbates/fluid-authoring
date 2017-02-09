@@ -21,9 +21,9 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             onDomUnbind: null
         },
         listeners: {
-            onCreate: "{that}.events.onDomBind.fire({that}, {that}.container)",
-            onDestroy: "{that}.events.onDomUnbind.fire({that}, {that}.container)",
-            onDomBind: "fluid.decoratorViewComponent.processDecorators({that}, {that}.options.decorators)"
+            "onCreate.bindDecorators": "{that}.events.onDomBind.fire({that}, {that}.container)",
+            "onDestroy.bindDecorators": "{that}.events.onDomUnbind.fire({that}, {that}.container)",
+            "onDomBind.bindDecorators": "fluid.decoratorViewComponent.processDecorators({that}, {that}.options.decorators)"
         }
     });
 
@@ -46,7 +46,6 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         var expanded = fluid.transform(args, function (arg, index) {
             return fluid.expandCompoundArg(that, arg, name + " argument " + index);
         });
-        console.log("Got expanded value of ", expanded, " for jQuery decorator");
         var func = node[dec.method];
         return func.apply(node, expanded);
     };

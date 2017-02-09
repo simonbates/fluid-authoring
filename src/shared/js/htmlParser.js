@@ -16,7 +16,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     "use strict";
     fluid.registerNamespace("fluid.htmlParser");
     // options:
-    //    selectors: String -> String
+    //    selectors: String [id] -> String/Array of String [selectors]
     fluid.htmlParser.parse = function (template, options) {
         var defaults = {
             selectors: {}
@@ -33,6 +33,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             defend: -1,
             parser: fluid.XMLP(template)
         };
+        fluid.htmlParser.parseSelectors(that);
         that.nodeStack[0] = that.rootNode;
         fluid.htmlParser.beginParse(that);
         return that;
@@ -42,7 +43,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         return tree.length === 1 && tree[0].predList.length === 1 && tree[0].predList[0].clazz;
     };
 
-    fluid.htmlParser.parseSelector = function (that) {
+    fluid.htmlParser.parseSelectors = function (that) {
         fluid.each(that.options.selectors, function (selRHS, id) {
             var selectors = fluid.makeArray(selRHS);
             fluid.each(selectors, function (selector) {
@@ -77,7 +78,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
                 var pred = term.predList[i];
                 if (pred.id && node.attrs.id !== pred.id) {return false;}
                 if (pred.clazz && !fluid.htmlParser.hasCssClass(pred.clazz, headclazz)) {return false;}
-                if (pred.tagName && node.tagName !== pred.tagName) {return false;}
+                if (pred.tag && node.tagName !== pred.tag) {return false;}
             }
             return true;
         }
@@ -119,7 +120,8 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         });
     };
 
-    fluid.htmlParser.endMatchSelector = function (that, node) {
+    fluid.htmlParser.endMatchSelector = function (that) {
+        var node = that.nodeStack[that.nodeStack.length - 1];
         fluid.each(that.parsedSelectors, function (parsedSelector) {
             var partial = parsedSelector.partialParse;
             if (partial.length > 0 && partial[partial.length - 1] === node) {
@@ -158,8 +160,8 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         }
     };
 
-    fluid.htmlParser.processTagEnd = function (that, node) {
-        fluid.htmlParser.endMatchSelector(that, node);
+    fluid.htmlParser.processTagEnd = function (that) {
+        fluid.htmlParser.endMatchSelector(that);
         that.nodeStack.pop();
     };
 

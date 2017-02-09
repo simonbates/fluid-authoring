@@ -12,9 +12,26 @@ https://raw.githubusercontent.com/GPII/nexus/master/LICENSE.txt
 
 "use strict";
 
-var fluid = require("infusion");
+var fluid = require("infusion"),
+    path = require("path");
 
 fluid.module.register("fluid-authoring", __dirname, require);
 
 require("gpii-nexus");
+
+var infusionBase = fluid.module.resolvePath("%infusion") + "/src/module";
+
+fluid.loadInContextRelative = function (modulePath) {
+    var absPath = fluid.module.resolvePath(modulePath);
+    var rel = path.relative(infusionBase, absPath);
+    fluid.loadInContext(rel);
+};
+
+fluid.loadInContextRelative("%fluid-authoring/src/shared/js/fastXmlPull.js");
+fluid.loadInContextRelative("%fluid-authoring/src/shared/js/htmlParser.js");
+fluid.loadInContextRelative("%fluid-authoring/src/shared/js/AuthorUtils.js");
+fluid.loadInContextRelative("%fluid-authoring/src/shared/js/ComponentGraphUtilities.js");
+
+require("./src/server/js/IncludeRewriting.js");
 require("./src/server/js/VisibleNexus.js");
+

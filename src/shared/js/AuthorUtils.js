@@ -63,7 +63,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
      * @return {Boolean} `true` if `prefix` is a prefix for the path `totest`
      */
     fluid.author.isPrefix = function (prefix, totest) {
-        if (prefix.length < totest.length) {
+        if (prefix.length <= totest.length) {
             for (var i = 0; i < prefix.length; ++i) {
                 if (prefix[i] !== totest[i]) {
                     return false;
@@ -73,6 +73,10 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         } else {
             return false;
         }
+    };
+
+    fluid.capitalizeFirstLetter = function (string) {
+        return string.charAt(0).toUpperCase() + string.slice(1);
     };
 
 })(jQuery, fluid_2_0_0);
