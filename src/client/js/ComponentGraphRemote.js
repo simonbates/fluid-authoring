@@ -46,6 +46,15 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             "onComponentDestroy.impl": {
                 funcName: "fluid.author.componentGraph.remote.onComponentDestroy",
                 args: ["{that}", "{arguments}.0.shadow"]
+            },
+            "onLocalModelChanged.transmit": {
+                funcName: "fluid.author.componentGraph.remote.transmitModelChanged",
+                                 // component, change
+                args: ["{that}", "{arguments}.0", "{arguments}.1"]
+            },
+            "onModelChanged.impl": {
+                funcName: "fluid.author.componentGraph.remote.applyModelChanged",
+                args: ["{that}", "{arguments}.0"]
             }
         },
         model: {
@@ -53,9 +62,12 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         },
         events: {
             onWSConnect: null,
+        // outgoing event fired by any model change within the "remote-component-root" tree (no doubt caused by our own UI)
+            onLocalModelChanged: null,
         // Remote events transmitted over WebSockets
             onComponentCreate: null,
-            onComponentDestroy: null
+            onComponentDestroy: null,
+            onModelChanged: null
         },
         invokers: {
             renderGradeName: "fluid.author.componentGraph.remote.renderGradeName({that}.options.remoteGradePrefix, {arguments}.0)",
@@ -63,8 +75,58 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             remotePathToLocal: "fluid.author.componentGraph.remotePathToLocal({that}.options.remoteAvatarRoot, {arguments}.0)",
             remoteGradeToLocal: "fluid.author.componentGraph.remoteGradeToLocal({that}.options.remoteGradePrefix, {arguments}.0)",
             destroyTargetComponent: "fluid.author.componentGraph.remote.destroyTargetComponent({that}, {arguments}.0)"
+        },
+        components: {
+            modelTracker: {
+                type: "fluid.author.componentGraph.modelTracker"
+            }
+        },
+        distributeOptions: {
+            localModelToNexus: {
+                record: "fluid.author.componentGraph.localModelToNexus",
+                target: "{/ remote-component-root fluid.modelComponent}.options.gradeNames"
+            }
         }
     });
+
+    // Identical pattern to fluid.authoring.nexus.componentTracker on the server side
+    fluid.defaults("fluid.author.componentGraph.modelTracker", {
+        gradeNames: ["fluid.component", "fluid.resolveRoot"],
+        components: {
+            componentGraph: "{fluid.author.componentGraph.remote}"
+        }
+    });
+
+    fluid.defaults("fluid.author.componentGraph.localModelToNexus", {
+        modelListeners: {
+            "": {
+                namespace: "notifyNexus",
+                excludeSource: ["init", "nexus"],
+                funcName: "{fluid.author.componentGraph.modelTracker}.componentGraph.events.onLocalModelChanged.fire",
+                args: ["{that}", "{change}"]
+            }
+        }
+    });
+
+    fluid.author.componentGraph.remote.transmitModelChanged = function (componentGraph, targetComponent, change) {
+        var shadow = componentGraph.idToShadow[targetComponent.id];
+        var message = {
+            type: "modelChanged",
+            componentPath: shadow.remotePath,
+            componentId: shadow.remoteId,
+            change: fluid.receivedChangeToFirable(change)
+        };
+        delete message.change.source.ui;
+        fluid.log("Sending modelChanged message ", message);
+        componentGraph.authorBusSocket.send(JSON.stringify(message));
+    };
+
+    fluid.author.componentGraph.remote.applyModelChanged = function (componentGraph, message) {
+        var localPath = componentGraph.remotePathToLocal(message.componentPath);
+        var targetComponent = fluid.componentForPath(localPath);
+        message.change.source = "nexus";
+        targetComponent.applier.fireChangeRequest(message.change);
+    };
 
     fluid.defaults("fluid.author.componentGraph.remoteWithCreator", {
         gradeNames: "fluid.decoratorViewComponent",
@@ -112,10 +174,11 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             }
         };
         ++that.lastCreatedSample;
-        $.ajax({
+        $.ajax({ // TODO: client-side AJAX DataSource
             type: "POST",
             url: postUrl,
-            data: body,
+            contentType: "application/json",
+            data: JSON.stringify(body),
             dataType: "text",
             success: function (response) {
                 fluid.log("Component created at " + nextPath + ": response ", response);
@@ -205,9 +268,9 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         };
         that.authorBusSocket.onmessage = function (messageEvent) {
             var message = JSON.parse(messageEvent.data);
-            var messageName = "on" + fluid.capitalizeFirstLetter(message.type);
-            fluid.log("Firing event " + messageName + " with payload ", message);
-            that.events[messageName].fire(message.payload);
+            var eventName = "on" + fluid.capitalizeFirstLetter(message.type);
+            fluid.log("Firing event " + eventName + " with payload ", message);
+            that.events[eventName].fire(message.payload);
         };
     };
 
@@ -215,6 +278,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         var message = {
             type: "connect",
             messageGeneration: that.model.messageGeneration,
+            clientId: that.id,
             ignorableGrades: that.options.ignorableGrades,
             ignorableRoots: that.options.ignorableRoots
         };

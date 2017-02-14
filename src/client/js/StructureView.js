@@ -80,6 +80,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             pullModel: "fluid.identity()",
             createValueComponents: "fluid.author.structureView.createValueComponents({that})",
             hostModelChanged: "fluid.author.structureView.hostModelChanged({that}, {arguments}.0, {arguments}.1)",
+            viewValueChanged: "fluid.author.structureView.viewValueChanged({that}, {arguments}.0)",
             // Fired with a jQuery which will be animated to indicate it represents a changed value
             highlightChange: "fluid.author.structureView.highlightChange({that}, {arguments}.0)",
             getRowPathElement: "fluid.author.structureView.getRowPathElement({that}, {arguments}.0)"
@@ -204,6 +205,14 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         return fluid.find(changeMapValue, function (value) {
             return typeof(value) === "string" ? true : undefined;
         }, false);
+    };
+
+    // Again, insane function to compensate for InlineEdit's prehistoric neglect of its ChangeApplier
+    fluid.author.structureView.viewValueChanged = function (structureView, valueView) {
+        var valuePath = valueView.options.structureViewPath;
+        fluid.log("View value changed to ", valueView.model, " at path " + valuePath);
+        var parsedValue = fluid.author.structureView.stringToPrimitive(valueView.model.value);
+        structureView.applier.change("hostModel." + valuePath, parsedValue, "ADD", "ui");
     };
 
     fluid.author.structureView.hostModelChanged = function (structureView, newModel, oldModel) {
@@ -338,6 +347,10 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         return object === undefined ? "undefined" : JSON.stringify(object);
     };
 
+    fluid.author.structureView.stringToPrimitive = function (string) {
+        return string === "undefined" ? undefined : JSON.parse(string);
+    };
+
     // Model is the local model, expansionModel is the full expansion model
     // We construct "rowInfo" records since we can't really bear the thought of constructing a full component for each one
     fluid.author.structureView.modelToRowInfo = function (model, segs, expansionModel, depth, rows) {
@@ -389,6 +402,9 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         },
         strings: {
             defaultViewText: ""
+        },
+        listeners: {
+            modelChanged: "{fluid.author.structureView}.viewValueChanged({that})"
         },
         // Horrifically bugged since these just accumulate endlessly
         useTooltip: false

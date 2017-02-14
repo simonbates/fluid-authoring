@@ -79,4 +79,17 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         return string.charAt(0).toUpperCase() + string.slice(1);
     };
 
+    /** Convert a `change` argument as received in a modelListener to one that is suitable to be re-fired
+     * via applier.requestChange.
+     */
+    // TODO: this needs to go into the core framework
+    fluid.receivedChangeToFirable = function (change) {
+        return {
+            value: change.value,
+            path: change.path,
+            type: change.value === undefined ? "DELETE" : "ADD",
+            source: fluid.copy(change.transaction.sources)
+        };
+    };
+
 })(jQuery, fluid_2_0_0);

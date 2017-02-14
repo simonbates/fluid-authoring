@@ -75,9 +75,19 @@ fluid.defaults("fluid.authoring.nexus.app", {
         }
     },
     events: {
+        // Locally sensed events corresponding to component tree changes
         onComponentCreate: null,
         onComponentDestroy: null,
-        onModelChanged: null
+        onLocalModelChanged: null,
+        // Client events transmitted over WebSockets bus
+        onModelChanged: null,
+        onConnect: null
+    },
+    listeners: {
+                                                                     // request, message
+        "onConnect.impl": "fluid.authoring.nexus.authorBus.onConnect({kettle.config}, {arguments}.0, {arguments}.1)",
+                                                                     // request, message
+        "onModelChanged.impl": "fluid.authoring.nexus.authorBus.onModelChanged({arguments}.0, {arguments}.1)"
     },
     requestHandlers: {
         // Well we sure blundered here, not putting all these other options into a grade!!
@@ -145,7 +155,7 @@ fluid.defaults("fluid.authoring.nexus.modelTracker", {
         "": {
             namespace: "notifyNexus",
             excludeSource: "init",
-            funcName: "{fluid.authoring.nexus.componentTracker}.nexusApp.events.onModelChanged.fire",
+            funcName: "{fluid.authoring.nexus.componentTracker}.nexusApp.events.onLocalModelChanged.fire",
             args: ["{that}", "{change}"]
         }
     }
@@ -156,7 +166,7 @@ fluid.defaults("fluid.authoring.nexus.authorBus.handler", {
     listeners: {
         "onReceiveMessage.impl": {
             funcName: "fluid.authoring.nexus.authorBus.receiveMessage",
-            args: ["{kettle.config}", "{that}", "{arguments}.1"]
+            args: ["{kettle.app}", "{that}", "{arguments}.1"]
                                                  // message
         },
         // Remember, no namespaces for these three listeners as per FLUID-5948
@@ -168,9 +178,9 @@ fluid.defaults("fluid.authoring.nexus.authorBus.handler", {
             func: "{that}.maybeSendShadow",
             args: ["{arguments}.0", true]
         },
-        "{kettle.app}.events.onModelChanged": {
-            func: "{that}.modelChanged",
-            args: ["{arguments}.0", "{arguments}.1"]
+        "{kettle.app}.events.onLocalModelChanged": {
+            func: "{that}.localModelChanged",
+            args: ["{arguments}.0", "{arguments}.1", "{arguments}.2"]
         }
     },
     invokers: {
@@ -180,7 +190,8 @@ fluid.defaults("fluid.authoring.nexus.authorBus.handler", {
         maybeSendShadow: "fluid.authoring.nexus.authorBus.maybeSendShadow({that}, {arguments}.0, {arguments}.1)",
                                                                                   // shadow, isDestroy
         sendShadow: "fluid.authoring.nexus.authorBus.sendShadow({kettle.config}, {that}, {arguments}.0, {arguments}.1)",
-        modelChanged: "fluid.authoring.nexus.authorBus.modelChanged({that}, {arguments}.0, {arguments}.1)"
+                                                                                  // component, change
+        localModelChanged: "fluid.authoring.nexus.authorBus.localModelChanged({that}, {arguments}.0, {arguments}.1)"
     }
 });
 
@@ -200,7 +211,7 @@ fluid.authoring.nexus.authorBus.sendShadow = function (config, request, shadow, 
     });
     request.sendTypedMessage(isDestroy ? "componentDestroy" : "componentCreate", {
         shadow: filterShadow,
-        messageGeneration: request.lastMessage.messageGeneration,
+        messageGeneration: request.connectMessage.messageGeneration,
         serverId: config.id
     });
 };
@@ -212,16 +223,23 @@ fluid.authoring.nexus.authorBus.isIncludedComponent = function (request, compone
     return fluid.author.componentGraph.isIncludedComponent(request.filterOptions, parsedPath, component) ? shadow : null;
 };
 
-fluid.authoring.nexus.authorBus.modelChanged = function (request, component, change) {
+fluid.authoring.nexus.authorBus.localModelChanged = function (request, component, change) {
     var shadow = request.isIncludedComponent(component);
-    if (shadow) {
+    var sources = change.transaction.sources;
+    if (shadow && !sources[request.connectMessage.clientId]) {
         request.sendTypedMessage("modelChanged", {
             componentPath: shadow.path,
             componentId: shadow.that.id,
-            messageGeneration: request.lastMessage.messageGeneration,
-            change: change
+            messageGeneration: request.connectMessage.messageGeneration,
+            change: fluid.receivedChangeToFirable(change)
         });
     }
+};
+
+fluid.authoring.nexus.authorBus.onModelChanged = function (request, message) {
+    var targetComponent = fluid.componentForPath(message.componentPath);
+    message.change.source = request.connectMessage.clientId;
+    targetComponent.applier.fireChangeRequest(message.change);
 };
 
 fluid.authoring.nexus.authorBus.maybeSendShadow = function (request, component, isDestroy) {
@@ -247,12 +265,18 @@ fluid.authoring.nexus.authorBus.sendShadows = function (request) {
 //     (type) - currently we support just one kind of connection message
 // On connection, we then do "sendShadows" for all current shadows, and then start a bus of additions and deletions
 
-fluid.authoring.nexus.authorBus.receiveMessage = function (config, request, message) {
-    request.lastMessage = message;
-    fluid.log("Got lastMessage ", request.lastMessage);
-    var filterOptions = fluid.filterKeys(request.lastMessage, ["ignorableRoots", "ignorableGrades"]);
+fluid.authoring.nexus.authorBus.onConnect = function (config, request, message) {
+    request.connectMessage = message;
+    fluid.log("Got connectMessage ", request.connectMessage);
+    var filterOptions = fluid.filterKeys(request.connectMessage, ["ignorableRoots", "ignorableGrades"]);
     var selfPath = fluid.pathForComponent(config);
     filterOptions.ignorableRoots[config.id] = selfPath;
     request.filterOptions = filterOptions;
     request.sendShadows();
+};
+
+fluid.authoring.nexus.authorBus.receiveMessage = function (app, request, message) {
+    var eventName = "on" + fluid.capitalizeFirstLetter(message.type);
+    fluid.log("Firing event " + eventName + " with payload ", message);
+    app.events[eventName].fire(request, message);
 };
