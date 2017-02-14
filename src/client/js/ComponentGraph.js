@@ -317,7 +317,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     fluid.author.componentGraph.mapComponent = function (componentGraph, shadow) {
         var id = shadow.that.id;
         var coords = fluid.author.componentGraph.getCoordinates(componentGraph, shadow.path);
-        if (fluid.author.componentGraph.isIncludedComponent(componentGraph.options, coords, shadow.that)) {
+        if (fluid.author.componentGraph.isIncludedComponent(componentGraph.options, coords.parsed, shadow.that)) {
             componentGraph.idToShadow[id] = shadow;
             componentGraph.pathToId[shadow.path] = id;
             if (coords.parentShadow) {
@@ -330,19 +330,21 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     fluid.author.componentGraph.unmapComponent = function (componentGraph, shadow) {
         var id = shadow.that.id,
             path = shadow.path;
-        delete componentGraph.idToShadow[id];
-        delete componentGraph.pathToId[path];
-        var coords = fluid.author.componentGraph.getCoordinates(componentGraph, path);
-        if (coords.parentShadow) {
-            delete coords.parentShadow.memberToChild[coords.memberName];
+        if (componentGraph.idToShadow[id]) {
+            delete componentGraph.idToShadow[id];
+            delete componentGraph.pathToId[path];
+            var coords = fluid.author.componentGraph.getCoordinates(componentGraph, path);
+            if (coords.parentShadow) {
+                delete coords.parentShadow.memberToChild[coords.memberName];
+            }
+            componentGraph.applier.change(["idToPath", id], null, "DELETE");
+            // TODO: Hack to compensate for FLUID-6127
+            console.log("Unmapped component at path " + path + " id " + id);
+            console.log("idToPath is now ", componentGraph.model.idToPath);
+            var viewComponent = componentGraph.idToView(id);
+            viewComponent.destroy();
+            componentGraph.events.invalidateLayout.fire();
         }
-        componentGraph.applier.change(["idToPath", id], null, "DELETE");
-        // TODO: Hack to compensate for FLUID-6127
-        console.log("Unmapped component at path " + path + " id " + id);
-        console.log("idToPath is now ", componentGraph.model.idToPath);
-        var viewComponent = componentGraph.idToView(id);
-        viewComponent.destroy();
-        componentGraph.events.invalidateLayout.fire();
     };
 
     // Sorts more nested views to the front

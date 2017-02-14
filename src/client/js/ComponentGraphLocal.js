@@ -26,9 +26,15 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             }
         },
         invokers: {
-            renderGradeName: "fluid.identity"
+            renderGradeName: "fluid.identity",
+            destroyTargetComponent: "fluid.destroyComponent({arguments}.0)"
         }
     });
+
+    // Utility function required because of FLUID-6130
+    fluid.destroyComponent = function (component) {
+        component.destroy();
+    };
 
     fluid.author.componentGraph.populateLocalComponents = function (that) {
         var instantiator = fluid.globalInstantiator;
@@ -50,5 +56,13 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             fluid.author.componentGraph.unmapComponent(that, shadow);
         }
     };
+
+    fluid.defaults("fluid.author.componentGraphPanel.popup.local", {
+        gradeNames: "fluid.author.componentGraphPanel.popup",
+        distributeOptions: {
+            record: "fluid.author.componentGraph.local",
+            target: "{that fluid.author.componentGraph}.options.gradeNames"
+        }
+    });
 
 })(jQuery, fluid_2_0_0);
