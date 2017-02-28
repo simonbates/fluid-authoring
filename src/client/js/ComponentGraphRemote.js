@@ -71,6 +71,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         },
         invokers: {
             renderGradeName: "fluid.author.componentGraph.remote.renderGradeName({that}.options.remoteGradePrefix, {arguments}.0)",
+            renderPath: "fluid.author.componentGraph.remote.renderPath({that}.options.remoteAvatarRoot, {arguments}.0)",
             sendConnect: "fluid.author.componentGraph.remote.sendConnect({that})",
             remotePathToLocal: "fluid.author.componentGraph.remotePathToLocal({that}.options.remoteAvatarRoot, {arguments}.0)",
             remoteGradeToLocal: "fluid.author.componentGraph.remoteGradeToLocal({that}.options.remoteGradePrefix, {arguments}.0)",
@@ -137,7 +138,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             createButton: ".fld-author-createButton"
         },
         markup: {
-            createButton: "<button class=\"fld-author-createButton\">Create model component</button>"
+            createButton: "<button class=\"fld-author-createButton\">Create sample model component</button>"
         },
         decorators: {
             createButton: {
@@ -221,6 +222,10 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         return gradeName.startsWith(remoteGradePrefix) ? gradeName.substring(remoteGradePrefix.length) : gradeName;
     };
 
+    fluid.author.componentGraph.remote.renderPath = function (remoteAvatarRoot, segs) {
+        return segs.slice(remoteAvatarRoot.length);
+    };
+
     fluid.author.componentGraph.remoteGradeToLocal = function (remoteGradePrefix, remoteGrade) {
         // Note that this ridiculous strategy will need to be fixed once FLUID-6123 is resolved
         return remoteGrade === "fluid.rootComponent" ? "fluid.component" :
@@ -294,4 +299,4 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         }
     });
 
-})(jQuery, fluid_2_0_0);
+})(jQuery, fluid_3_0_0);

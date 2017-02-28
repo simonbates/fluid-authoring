@@ -6,7 +6,8 @@
     "bugs": "http://issues.fluidproject.org/browse/FLUID",
     "homepage": "http://www.fluidproject.org/",
     "dependencies": {
-        "infusion": "2.0.0-dev.20161219T170555Z.5778f7e",
+        "infusion": "3.0.0-dev.20170221T200310Z.095ff9f",
+        "kettle": "1.4.0",
         "chartAuthoring": "amb26/chartAuthoring#FLOE-484",
         "gpii-nexus": "0.1.0"
     },
@@ -25,11 +26,11 @@
     "scripts": {
     },
     "engines": {
-        "node": ">=4.2.1",
+        "node": ">=4.5.0",
         "npm": ">=3.0.0"
     },
     "devDependencies": {
-        "eslint-config-fluid": "1.0.0",
+        "eslint-config-fluid": "1.1.0",
         "fluid-grunt-eslint": "18.1.2",
         "grunt": "1.0.1",
         "grunt-contrib-copy": "1.0.0",

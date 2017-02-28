@@ -16,13 +16,15 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     // NEW current plan: Subcomponents such as this will render strictly later than the construct-time of the parent. Therefore we HOPE
     // that their construct-time rendering can bind to the already rendered "parentContainer" produced by "elements".
     fluid.defaults("fluid.author.structureView", {
-        gradeNames: ["fluid.newViewComponent", "fluid.author.containerRenderingView", "fluid.author.domReadBounds"],
+        gradeNames: ["fluid.newViewComponent", "fluid.author.containerRenderingView", "fluid.author.domReadBounds",
+            "fluid.plainAriaLabels"],
         mergePolicy: {
             bindingRootReference: "noexpand"
         },
         // Clients must override this with an IoC reference to a view component in the scope of which browser event binding will occur
         bindingRootReference: "fluid.mustBeOverridden",
         selectors: {
+            row: ".fld-author-row",
             mutableParent: ".fld-author-structureView-mutableParent",
             // This is a "fake selector" that will not be operated by the DOM binder, but instead will be string templated by getRowPathElement
             // Note that https://sites.google.com/site/chandrasekhardutta/home/jquery-performance-analysis-of-selectors suggests that this selector form helps a lot - or at least it did in the 70s!
@@ -35,10 +37,10 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         highlightChangeDuration: 2000,
         markup: {
             container: "<table class=\"fld-author-structureView\" data-structureView-id=\"%componentId\"><tbody class=\"fld-author-structureView-mutableParent\">%rows</tbody></table>",
-            rowMarkup: "<tr><td class=\"%rowClass\" style=\"padding-left: %padding\" data-structureView-rowPath=\"%rowPath\">%element</td></tr>",
+            rowMarkup: "<tr><td class=\"fld-author-row %rowClass\" style=\"padding-left: %padding\" data-structureView-rowPath=\"%rowPath\" aria-label=\"%label\">%element</td></tr>",
             elementMarkup: "%expander%key<span id=\"%valueId\"><span class=\"flc-inlineEdit-text\">%value</span></span>",
-            expanderClosed: "<span class=\"fl-author-expander fl-author-expander-closed\"></span>",
-            expanderOpen: "<span class=\"fl-author-expander fl-author-expander-open\"></span>"
+            expanderClosed: "<span class=\"fl-author-expander fl-author-expander-closed\" tabindex=\"0\" aria-label=\"%label\"></span>",
+            expanderOpen: "<span class=\"fl-author-expander fl-author-expander-open\" tabindex=\"0\" aria-label=\"%label\"></span>"
         },
         events: {
             // Cascaded recursively from parent for updates
@@ -47,13 +49,29 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             invalidateLayout: null,
             createValueComponent: null,
             // Fired when a change has occurred which will be highlighted
-            onHighlightChange: null
+            onHighlightChange: null,
+            onMarkupUpdated: null
         },
         members: {
             // A lookup of model path to early row information (including valueId, the id in the DOM of the container for the value, and rowType)
             pathToRowInfo: {},
             // A lookup of model path to the member name of the corresponding value component (maintained by DynamicComponentIndexer)
             pathToValueComponent: {}
+        },
+        components: {
+            selectable: {
+                type: "fluid.keys.linearSelectable",
+                options: {
+                    components: {
+                        hostComponent: "{fluid.author.structureView}"
+                    },
+                    selectablesSelectorName: "row",
+                    listeners: {
+                        "{fluid.author.structureView}.events.onMarkupUpdated": "{that}.events.onSelectablesUpdated.fire()",
+                        "{fluid.author.structureView}.events.onCreate": "{that}.events.onSelectablesUpdated.fire()"
+                    }
+                }
+            }
         },
         dynamicComponents: {
             valueComponents: {
@@ -278,9 +296,10 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     };
 
     fluid.defaults("fluid.author.structureViewBinder", {
-        gradeNames: "fluid.component",
+        gradeNames: ["fluid.component", "fluid.keys.activatable"],
         // Override with a DOM element holding the required root
         bindingRootElement: "fluid.mustBeOverridden",
+        activatableKeysets: fluid.keys.activatable.defaultKeysets,
         invokers: {
             findStructureView: "fluid.author.getAttribute({arguments}.0, data-structureView-id)",
             findRowPath: "fluid.author.getAttribute({arguments}.0, data-structureView-rowPath)",
@@ -306,6 +325,14 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         return path === "." ? "" : path;
     };
 
+    fluid.author.segsToReadable = function (renderPath, localSegs) {
+        return renderPath(localSegs).join(" dot ");
+    };
+
+    fluid.author.pathSegsToReadable = function (segs) {
+        return segs.length === 0 ? " root path" : " path " + fluid.author.segsToReadable(fluid.identity, segs) + " ";
+    };
+
     fluid.author.structureViewBinder.expanderClick = function (event, structureViewBinder) {
         // YEAH WE HAVE DONE THIS GARBAGE AND INSTANCE-FREE (minus the path construction/parsing)
         var structureView = fluid.author.structureView.findComponent(event.target, structureViewBinder.findStructureView);
@@ -323,6 +350,12 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     fluid.author.structureViewBinder.bindEvents = function (structureViewBinder) {
         var bindingContainer = structureViewBinder.options.bindingRootElement;
         bindingContainer.on("click", ".fl-author-expander", structureViewBinder.expanderClick);
+        fluid.keys.bindFilterKeys({
+            container: bindingContainer,
+            filterSelector: ".fl-author-expander",
+            keysets: structureViewBinder.options.activatableKeysets,
+            handler: structureViewBinder.expanderClick
+        });
     };
 
     fluid.author.structureView.pullModel = function (structureView) {
@@ -340,6 +373,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             var newMarkup = structureView.renderInnerMarkup();
             structureView.locate("mutableParent").html(newMarkup);
             structureView.readBounds();
+            structureView.events.onMarkupUpdated.fire(structureView);
         }
     };
 
@@ -362,6 +396,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             if (rowInfo.rowType === "primitive") {
                 rowInfo.valueId = fluid.allocateGuid();
             }
+            rowInfo.segs = segs;
             rowInfo.path = fluid.pathUtil.composeSegments.apply(null, segs);
             rows.push(rowInfo);
         };
@@ -425,28 +460,50 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         });
     };
 
+    fluid.author.structureView.renderExpanderMarkup = function (row, markup, pathLabel) {
+        if (row.rowType === "typeHeader") {
+            var options = row.expanded ? {
+                template: markup.expanderOpen,
+                label: "unexpand"
+            } : {
+                template: markup.expanderClosed,
+                label: "expand"
+            };
+            return fluid.stringTemplate(options.template, {
+                label: options.label + pathLabel
+            });
+        } else {
+            return "";
+        }
+    };
+
     fluid.author.structureView.renderInnerMarkup = function (structureView, model, markup, rowPaddingOffset) {
         var rows = [];
         structureView.pathToRowInfo = {};
         fluid.author.structureView.modelToRowInfo(model.hostModel, [], model.expansionModel, 0, rows);
+        // TODO: appalling binding to onCreate-rendered label which will not even be available on startup
+        var structureLabel = fluid.get(structureView, "plainAriaLabels.container") || "";
         var renderedRows = fluid.transform(rows, function (row) {
             // Abominable side-effect to update lookup. We dream minute by minute of the new renderer
             structureView.pathToRowInfo[row.path] = {
                 valueId: row.valueId,
                 rowType: row.rowType
             };
+            var pathLabel = fluid.author.pathSegsToReadable(row.segs) + " of " + structureLabel;
             var elementTerms = {
-                expander: row.rowType === "typeHeader" ? (row.expanded ? markup.expanderOpen : markup.expanderClosed) : "",
+                expander: fluid.author.structureView.renderExpanderMarkup(row, markup, pathLabel),
                 key: (row.key === null ? "" : row.key + ": "),
                 valueId: row.valueId || "", // oh for a renderer
                 value: row.value
             };
             var element = fluid.stringTemplate(markup.elementMarkup, elementTerms);
+            var expanderText = row.rowType === "typeHeader" ? (row.expanded ? "expanded" : "unexpanded") : "leaf";
             var terms = {
                 rowClass: "fl-structureView-row-" + row.rowType,
                 element: element,
                 // encoding hack to allow transporting empty path through system
                 rowPath: fluid.XMLEncode(fluid.author.escapePathForAttribute(row.path)),
+                label: expanderText + pathLabel,
                 padding: row.depth * rowPaddingOffset + "em"
             };
             return fluid.stringTemplate(markup.rowMarkup, terms);
@@ -466,4 +523,4 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         return containerMarkup;
     };
 
-})(jQuery, fluid_2_0_0);
+})(jQuery, fluid_3_0_0);

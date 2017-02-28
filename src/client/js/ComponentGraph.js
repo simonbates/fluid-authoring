@@ -62,129 +62,30 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         }
     });
 
-    // A mixin grade for fluid.author.componentGraph that manages interaction with SVG arrows
-    fluid.defaults("fluid.author.componentGraphSVGArrows", {
-        distributeOptions: {
-            record: "{svgPane}.container",
-            target: "{that fluid.author.svgArrow}.options.parentContainer"
-        },
-        dynamicComponents: {
-            arrows: {
-                type: "fluid.author.svgArrow",
-                createOnEvent: "createArrow",
-                options: "{arguments}.0"
-            }
-        }
-    });
-
-    fluid.author.vectorToPolar = function (start, end) {
-        var dx = end[0] - start[0], dy = end[1] - start[1];
-        return {
-            length: Math.sqrt(dx * dx + dy * dy),
-            angle: Math.atan2(dy, dx)
-        };
-    };
-
-    fluid.defaults("fluid.author.svgArrow", {
-        gradeNames: ["fluid.newViewComponent", "fluid.author.containerSVGRenderingView"],
-        markup: {
-            arrow: "<polygon xmlns=\"http://www.w3.org/2000/svg\" class=\"fld-author-arrow\" points=\"%points\" transform=\"%transform\"/>",
-            transform: "translate(%startX %startY) rotate(%angle)"
-        },
-        model: {
-            arrowGeometry: {
-                length: "{that}.model.polar.length",
-                width: 10,
-                headWidth: 20,
-                headHeight: 20,
-                angle: "{that}.model.polar.angle",
-                start: [100, 100],
-                end: [200, 200]
-            }
-        },
-        modelRelay: {
-            "endsToPolar": {
-                target: "polar",
-                singleTransform: {
-                    type: "fluid.transforms.free",
-                    func: "fluid.author.vectorToPolar",
-                    args: ["{that}.model.arrowGeometry.start", "{that}.model.arrowGeometry.end"]
-                }
-            },
-            "geometryToTransform": {
-                target: "arrowTransform",
-                singleTransform: {
-                    type: "fluid.transforms.stringTemplate",
-                    template: "{that}.options.markup.transform",
-                    terms: {
-                        startX: "{that}.model.arrowGeometry.start.0",
-                        startY: "{that}.model.arrowGeometry.start.1",
-                        angle: 0
-                    }
-                }
-            },
-            "geometryToPoints": {
-                target: "arrowPoints",
-                singleTransform: {
-                    type: "fluid.transforms.free",
-                    func: "fluid.author.svgArrow.renderArrowPoints",
-                    args: ["{that}.model.arrowGeometry.width", "{that}.model.arrowGeometry.headWidth",
-                           "{that}.model.arrowGeometry.length", "{that}.model.arrowGeometry.headHeight",
-                           "{that}.model.arrowGeometry.angle"]
-                }
-            }
-        },
-        invokers: {
-            renderMarkup: {
-                funcName: "fluid.stringTemplate",
-                args: ["{that}.options.markup.arrow", {
-                    points: "{that}.model.arrowPoints",
-                    transform: "{that}.model.arrowTransform"
-                }]
-            }
-        },
-        modelListeners: {
-            "arrowPoints": {
-                excludeSource: "init", // necessary to avoid triggering double evaluation of container with faulty framework
-                "this": "{that}.container",
-                method: "attr",
-                args: ["points", "{change}.value"]
-            },
-            "arrowTransform": {
-                excludeSource: "init",
-                "this": "{that}.container",
-                method: "attr",
-                args: ["transform", "{change}.value"]
-            }
-        }
-    });
-
-    fluid.author.svgArrow.renderArrowPoints = function (width, headWidth, length, headHeight, angle) {
-        var w = width / 2,
-            hw = headWidth / 2,
-            hp = length - headHeight,
-            c = Math.cos(angle),
-            s = Math.sin(angle);
-        var points = [
-            [-w / s, 0],
-            [w / s, 0],
-            [hp * c + w * s, hp * s - w * c],
-            [hp * c + hw * s, hp * s - hw * c],
-            [length * c, length * s],
-            [hp * c - hw * s, hp * s + hw * c],
-            [hp * c - w * s, hp * s + w * c]
-        ];
-        return fluid.author.pointsToSVG(points);
-    };
-
     fluid.defaults("fluid.author.componentGraph", {
         gradeNames: ["fluid.viewComponent", "fluid.author.viewContainer", "fluid.author.domSizing"],
         events: {
             createComponentView: null,
             createArrow: null,
-            invalidateLayout: null
+            invalidateLayout: null,
+            doLayout: null,
+            onDirectionKey: null
         },
+        selectors: {
+            // Whilst currently in practice componentViews and selectables match the same elements, we separate them
+            // in case there is a future divergence. "selectables" is evaluated by hand from our own records of each
+            // individual componentView
+            componentViews: ".fld-author-componentView",
+            selectables: "{that}.getSelectables"
+        },
+        keysets: fluid.keys.defaultKeysets.grid,
         components: {
+            selectable: {
+                type: "fluid.author.graphSelectable",
+                options: {
+
+                }
+            }
         /* Sketch generalised implementation
             componentViewMapper: {
                 type: "fluid.author.componentImager",
@@ -207,7 +108,8 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             layout: {
                 width: 2000,
                 height: 2000
-            }
+            },
+            selectedId: null
         },
         ignorableRoots: {
             "resolveRootComponent": ["resolveRootComponent"]
@@ -223,7 +125,8 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             // A map of raw component ids to a "shadow" document, holding a representation of the component at member "that"
             // These two managed by mapComponent/componentClear listener
             idToShadow: {},
-            pathToId: {} // TODO move to model after checking escaping
+            pathToId: {} // TODO move to model after checking escaping,
+            // rootComponentRecord: computed by doLayout
         },
         modelListeners: {
             updateComponentView: {
@@ -250,11 +153,14 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             }
         },
         listeners: {
-            "invalidateLayout.scheduleLayout": "@expand:fluid.author.debounce({that}.doLayout, 1)"
+            "invalidateLayout.scheduleLayout": "@expand:fluid.author.debounce({that}.events.doLayout.fire, 1)",
+            "doLayout.impl": "fluid.author.componentGraph.doLayout({that})",
+            "onCreate.setContainerTabIndex": "fluid.tabindex({that}.container, 0)"
         },
         invokers: {
-            doLayout: "fluid.author.componentGraph.doLayout({that})",
-            idToView: "fluid.author.componentGraph.idToView({that}, {arguments}.0)"
+            idToView: "fluid.author.componentGraph.idToView({that}, {arguments}.0)",
+            elementToView: "fluid.author.componentGraph.elementToView({that}, {arguments}.0)",
+            getSelectables: "fluid.author.componentGraph.getSelectables({that})"
         },
         boxHeight: 80,
         boxWidth: 200,
@@ -272,12 +178,98 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         dynamicIndexTarget: "{fluid.author.componentGraph}"
     });
 
+    fluid.author.componentGraph.childPosition = function (memberToChild, childComponent) {
+        var children = fluid.values(memberToChild);
+        var childIndex = fluid.find(children, function (child, index) {
+            return child === childComponent ? index : undefined;
+        });
+        return {
+            children: children,
+            index: childIndex
+        };
+    };
 
+    fluid.defaults("fluid.author.graphSelectable", {
+        gradeNames: "fluid.keys.gridSelectable",
+        components: {
+            hostComponent: "{fluid.author.componentGraph}"
+        },
+        invokers: {
+            elementToKey: "fluid.author.graphSelectable.elementToId({that}.hostComponent, {arguments}.0)",
+            keyToElement: "fluid.author.graphSelectable.idToElement({that}.hostComponent, {arguments}.0)",
+            validateKey: "fluid.author.graphSelectable.validateId({that}.hostComponent, {arguments}.0)",
+            // oldKey, direction
+            directionToKey: "fluid.author.graphSelectable.directionToKey({that}.hostComponent, {arguments}.0, {arguments}.1)"
+        },
+        selectablesSelectorName: "componentViews",
+        listeners: {
+            // We piggy-back this onto doLayout because the workflow in modelListeners updateComponentView is hacked and partially asynchronous to avoid model races
+            "{that}.hostComponent.events.doLayout": {
+                namespace: "updateSelectables",
+                func: "{that}.events.onSelectablesUpdated.fire",
+                args: "{that}",
+                priority: "after:impl"
+            },
+            "{that}.hostComponent.events.onCreate": "{that}.events.onSelectablesUpdated.fire()"
+        }
+    });
+
+    fluid.author.graphSelectable.elementToId = function (that, element) {
+        var viewComponent = that.elementToView(element);
+        return viewComponent ? viewComponent.viewRecord.that.id : null;
+    };
+
+    fluid.author.graphSelectable.idToElement = function (that, id) {
+        return id ? that.idToView(id).container[0] : null;
+    };
+
+    fluid.author.graphSelectable.validateId = function (that, id) {
+        if (id && !that.idToView(id)) {
+            return that.rootComponentRecord.that.id;
+        } else {
+            return id;
+        }
+    };
+
+    fluid.author.graphSelectable.directionToKey = function (that, selectedId, keyDir) {
+        if (!selectedId) {
+            return;
+        }
+        var coords = that.idToView(selectedId).viewRecord.coords;
+        var shadow = that.idToShadow[selectedId];
+        var parentShadow = coords.parentShadow;
+        var newComponent, childPosition;
+        if (fluid.directionOrientation(keyDir) === "horizontal" && parentShadow) {
+            childPosition = fluid.author.componentGraph.childPosition(parentShadow.memberToChild, shadow.that);
+            var newIndex = fluid.positiveMod(childPosition.index + fluid.directionSign(keyDir), childPosition.children.length);
+            newComponent = childPosition.children[newIndex];
+        } else if (keyDir === "down") {
+            childPosition = fluid.author.componentGraph.childPosition(shadow.memberToChild);
+            newComponent = childPosition.children[0];
+        } else if (keyDir === "up") {
+            newComponent = parentShadow ? parentShadow.that : null;
+        }
+        return newComponent ? newComponent.id : selectedId;
+    };
+
+    fluid.author.componentGraph.getSelectables = function (that) {
+        var nodes = [];
+        if (that.model) {
+            fluid.each(that.model.idToPath, function (path, id) {
+                var viewMember = that[that.idToViewMember[id]];
+                if (viewMember) {
+                    nodes.push(viewMember.container[0]);
+                }
+            });
+        }
+        return $(nodes);
+    };
 
     /** Accepts a (concrete) path into the target component tree and parses it into a collection of useful pre-geometric info,
      * including the path, reference and shadow of its parent, and member name within it
      * @param componentGraph {componentGraph} A componentGraph component
      * @param path {String} The string form of a concrete component path in its tree
+     * @param that {Component} The component itself
      * @return {Object} A structure of pre-geometric info:
      *    parsed {Array of String}: Array of path segments of component in tree
      *    parentSegs {Array of String}: Array of path segments of component's parent in tree
@@ -286,19 +278,20 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
      *    parentId {String}: If the component is not the root component, the id of its parent
      *    parentShadow {Object}: If the component is not the root component, its parent shadow record
      */
-    fluid.author.componentGraph.getCoordinates = function (componentGraph, path) {
+    fluid.author.componentGraph.getCoordinates = function (componentGraph, path, that) {
         var instantiator = fluid.globalInstantiator;
         var parsed = instantiator.parseEL(path);
         var togo = {
             parsed: parsed,
-            parentSegs: parsed.slice(0, parsed.length - 1),
-            memberName: parsed[parsed.length - 1]
+            parentSegs: parsed.slice(0, parsed.length - 1)
         };
         if (parsed.length > 0) {
+            togo.memberName = parsed[parsed.length - 1];
             togo.parentPath = instantiator.composeSegments.apply(null, togo.parentSegs);
             togo.parentId = componentGraph.pathToId[togo.parentPath];
             if (togo.parentId) { // It may be missing, if we are racing against ourselves in startup
                 togo.parentShadow = componentGraph.idToShadow[togo.parentId];
+                togo.childPosition = fluid.author.componentGraph.childPosition(togo.parentShadow.memberToChild, that);
             }
         }
         return togo;
@@ -314,9 +307,14 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         return togo;
     };
 
+    fluid.author.componentGraph.elementToView = function (componentGraph, element) {
+        var targetId = element.dataset.targetid;
+        return targetId ? componentGraph.idToView(targetId) : null;
+    };
+
     fluid.author.componentGraph.mapComponent = function (componentGraph, shadow) {
         var id = shadow.that.id;
-        var coords = fluid.author.componentGraph.getCoordinates(componentGraph, shadow.path);
+        var coords = fluid.author.componentGraph.getCoordinates(componentGraph, shadow.path, shadow.that);
         if (fluid.author.componentGraph.isIncludedComponent(componentGraph.options, coords.parsed, shadow.that)) {
             componentGraph.idToShadow[id] = shadow;
             componentGraph.pathToId[shadow.path] = id;
@@ -333,17 +331,11 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         if (componentGraph.idToShadow[id]) {
             delete componentGraph.idToShadow[id];
             delete componentGraph.pathToId[path];
-            var coords = fluid.author.componentGraph.getCoordinates(componentGraph, path);
+            var coords = fluid.author.componentGraph.getCoordinates(componentGraph, path, shadow.that);
             if (coords.parentShadow) {
                 delete coords.parentShadow.memberToChild[coords.memberName];
             }
             componentGraph.applier.change(["idToPath", id], null, "DELETE");
-            // TODO: Hack to compensate for FLUID-6127
-            console.log("Unmapped component at path " + path + " id " + id);
-            console.log("idToPath is now ", componentGraph.model.idToPath);
-            var viewComponent = componentGraph.idToView(id);
-            viewComponent.destroy();
-            componentGraph.events.invalidateLayout.fire();
         }
     };
 
@@ -418,6 +410,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
                 childLeft += childShadow.childrenWidth + o.horizontalGap;
             });
         });
+        componentGraph.rootComponentRecord = records[0];
         componentGraph.applier.change("layout", rootLayout);
         fluid.log("LAYOUT ENDED");
     };
@@ -436,73 +429,6 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             }
         };
         return options;
-    };
-
-    // Mixin grade to bind arrow component into context between two ComponentView instances within a ComponentGraph
-    fluid.defaults("fluid.author.arrowForComponentView", {
-        components: {
-            sourceView: {
-                expander: {
-                    func: "{componentGraph}.idToView",
-                    args: "{arrowForComponentView}.options.sourceId"
-                }
-            },
-            parentView: {
-                expander: {
-                    func: "{componentGraph}.idToView",
-                    args: "{arrowForComponentView}.options.parentId"
-                }
-            }
-        },
-        model: {
-            arrowGeometry: {
-                start: "{that}.model.arrowLayout.start",
-                end: "{that}.model.arrowLayout.end"
-            }
-        },
-        listeners: {
-            "{sourceView}.events.onDestroy": "{that}.destroy",
-            "{parentView}.events.onDestroy": "{that}.destroy"
-        },
-        modelRelay: {
-            arrowLayout: {
-                target: "arrowLayout",
-                singleTransform: {
-                    type: "fluid.transforms.free",
-                    func: "fluid.author.routeArrow",
-                    args: ["{componentGraph}", "{that}", "{that}.sourceView.model.layout", "{that}.parentView.model.layout"]
-                }
-            }
-        }
-    });
-
-    fluid.author.routeArrow = function (componentGraph, arrow, sourceLayout, parentLayout) {
-        var sourceLeft = fluid.get(sourceLayout, "left");
-        var parentLeft = fluid.get(parentLayout, "left");
-        // As well as standard framework relay timing issues, initial layout is asynchronous
-        if (typeof(sourceLeft) !== "number" || typeof(parentLeft) !== "number") {
-            return {};
-        }
-        var sourceId = arrow.sourceView.options.rawComponentId, parentId = arrow.parentView.options.rawComponentId;
-        var parentShadow = componentGraph.idToShadow[parentId];
-        var childComponent = componentGraph.idToShadow[sourceId].that;
-        var children = fluid.values(parentShadow.memberToChild);
-        var childIndex = fluid.find(children, function (child, index) {
-            return child === childComponent ? index : undefined;
-        });
-        return {
-            start: [parentLayout.left + parentLayout.width * (childIndex + 1) / (children.length + 1), parentLayout.top + parentLayout.height - 0.5],
-            end: [sourceLayout.left + sourceLayout.width / 2, sourceLayout.top]
-        };
-    };
-
-    fluid.author.componentGraph.makeArrowComponentOptions = function (componentGraph, sourceId, path) {
-        var coords = fluid.author.componentGraph.getCoordinates(componentGraph, path);
-        return {
-            gradeNames: "fluid.author.arrowForComponentView",
-            sourceId: sourceId,
-            parentId: coords.parentId
-        };
     };
 
     /** Invoked by the modelListener to the componentGraph's idToPath model block.
@@ -534,17 +460,6 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         }
     };
 
-    // TODO: Consolidate with updateComponentView
-    fluid.author.componentGraph.updateArrow = function (componentGraph, idPath, path) {
-        var id = idPath[1]; // segment 0 is "idToPath"
-        if (path === undefined) {
-            var viewComponent = componentGraph.idToView(id);
-            viewComponent.destroy();
-        } else {
-// TODO: Moved up into componentGraph above to avoid race
-        }
-    };
-
     // The current framework allows grades to (legitimately) appear multiple times in the resolved list - but this is not helpful in the UI
     fluid.author.dedupeGrades = function (gradeNames) {
         var gradeHash = {}, outGrades = [];
@@ -561,14 +476,15 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         var togo = Object.create(fluid.author.computeViewRecord.prototype);
         togo.shadow = componentGraph.idToShadow[targetId];
         togo.that = togo.shadow.that;
-        togo.coords = fluid.author.componentGraph.getCoordinates(componentGraph, togo.shadow.path);
+        togo.coords = fluid.author.componentGraph.getCoordinates(componentGraph, togo.shadow.path, togo.that);
         togo.rowIndex = togo.coords.parsed.length;
         return Object.freeze(togo);
     };
 
     fluid.defaults("fluid.author.componentView", {
         gradeNames: ["fluid.newViewComponent", "fluid.decoratorViewComponent", "fluid.author.containerRenderingView",
-            "fluid.indexedDynamicComponent", "fluid.author.domPositioning", "fluid.author.domReadBounds"],
+            "fluid.indexedDynamicComponent", "fluid.author.domPositioning", "fluid.author.domReadBounds",
+            "fluid.keys.activatable",  "fluid.plainAriaLabels"],
         mergePolicy: {
             elements: "noexpand"
         },
@@ -579,6 +495,18 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             // This unreasonable hack is currently our best route around FLUID-5028
             source: "{that}.options.optionsHolder",
             target: "{that}.options"
+        },
+        plainAriaLabels: {
+            "container": {
+                template: "Child %index of %siblings at path %path id %id with %children children",
+                termMap: {
+                    path: "@expand:fluid.author.segsToReadable({componentGraph}.renderPath, {that}.viewRecord.coords.parsed)",
+                    id: "@expand:fluid.author.idToReadable({that}.viewRecord.that.id)",
+                    children: "@expand:fluid.author.childCount({that}.viewRecord)",
+                    index: "{that}.viewRecord.coords.childPosition.index",
+                    siblings: "{that}.viewRecord.coords.childPosition.children.length"
+                }
+            }
         },
         elements: {
             grades: {
@@ -599,28 +527,66 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         events: { // Currently we paint ourselves on creation and so there are no local listeners
             onRefreshView: null
         },
+        listeners: {
+            "onCreate.bindDestroyButton": "fluid.author.componentView.bindDestroyButton({that}, {that}.dom.destroyButton)"
+        },
         selectors: {
+            container: "",
             destroyButton: ".fld-author-destroy"
         },
         decorators: {
             destroyButton: {
                 type: "jQuery",
                 method: "click",
-                args: "{componentGraph}.destroyTargetComponent({that}.viewRecord.that)"
+                args: ""
             }
         },
         markup: {
-            container: "<div class=\"fld-author-componentView\" targetId=\"%targetId\" ownId=\"%ownId\">%memberName%destroyButton<table>%childRows</table></div>",
+            container: "<div class=\"fld-author-componentView\" data-targetId=\"%targetId\" data-ownId=\"%ownId\" tabindex=\"0\">%memberName<table>%childRows</table>%destroyButton</div>",
             memberName: "<div class=\"fld-author-member\">%member</div>",
-            destroyButton: "<div class=\"fld-author-destroy\"></div>",
+            destroyButton: "<div class=\"fld-author-destroy\" tabindex=\"0\" aria-label=\"%label\"></div>",
             structureRow: "<tr class=\"%structureRowClass\"><td class=\"%structureTitleClass\">%title</td><td class=\"%structureCellClass fl-structureCell\"></td></tr>"
         },
         invokers: {
             prepareGradeNames: "fluid.author.componentView.prepareGradeNames({componentGraph}.renderGradeName, {that}.viewRecord.that)",
-            renderMarkup: "fluid.author.componentView.renderMarkup({componentGraph}, {that}, {that}.viewRecord.that, {that}.options.markup, {that}.options.rowMaterials.rowsMarkup)",
-            renderMemberName: "fluid.author.componentView.renderMemberName({componentGraph}, {that}, {that}.viewRecord.that, {that}.options.markup)"
+            renderMarkup: {
+                funcName: "fluid.author.componentView.renderMarkup",
+                args: ["{componentGraph}", "{that}", "{that}.viewRecord.that", "{that}.options.markup",
+                    "{that}.plainAriaLabels", "{that}.options.rowMaterials.rowsMarkup"]
+            },
+            renderMemberName: "fluid.author.componentView.renderMemberName({componentGraph}, {that}, {that}.viewRecord.that, {that}.options.markup)",
+            destroyTargetComponent: "{componentGraph}.destroyTargetComponent({that}.viewRecord.that)",
+            adjustAriaLabel: "fluid.author.componentView.adjustAriaLabel({that}, {componentGraph}.renderPath, {arguments}.0)"
         }
     });
+
+    fluid.author.idToReadable = function (id) {
+        return id.substring(id.indexOf("-") + 1);
+    };
+
+    fluid.author.childCount = function (viewRecord) {
+        var count = fluid.author.componentGraph.childPosition(viewRecord.shadow.memberToChild).children.length;
+        return count === 0 ? "no" : count;
+    };
+
+    fluid.author.componentView.adjustAriaLabel = function (componentView, renderPath, ariaLabel) {
+        return renderPath(componentView.viewRecord.coords.parsed).length === 0 ? {
+            template: "Root component with %children children",
+            termMap: {
+                children: ariaLabel.termMap.children
+            }
+        } : ariaLabel;
+    };
+
+    fluid.author.componentView.bindDestroyButton = function (componentView, destroyButton) {
+        destroyButton.on("click.destroyButton", componentView.destroyTargetComponent);
+        fluid.keys.bindFilterKeys({
+            container: destroyButton,
+            filterSelector: null,
+            keysets: componentView.options.activatableKeysets,
+            handler: componentView.destroyTargetComponent
+        });
+    };
 
     // child components are dynamic so we bypass the DOM binder and return to this ancient technique
     // TODO - is this race-breaking really necessary now?
@@ -660,6 +626,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             gradeNames: "fluid.author.modelSyncingSICV"
         };
         options.parentContainer = fluid.author.makeLocateFunc(containerHolder, "." + terms.structureCellClass);
+        options.elementKey = elementKey;
         options.selectors = {
             // Pretty awful - this actually lies outside the structureView's container, but we bolt it on so we can animate it
             title: fluid.author.makeLocateFunc(containerHolder, "." + terms.structureTitleClass)
@@ -687,10 +654,13 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         return Object.freeze(togo);
     };
 
-    fluid.author.componentView.renderMarkup = function (componentGraph, componentView, that, markupBlock, rowsMarkup) {
+    fluid.author.componentView.renderMarkup = function (componentGraph, componentView, that, markupBlock, plainAriaLabels, rowsMarkup) {
+        var destroyMarkup = fluid.stringTemplate(markupBlock.destroyButton, {
+            label: "destroy " + plainAriaLabels.container
+        });
         var containerModel = {
             memberName: fluid.getForComponent(componentView, "renderMemberName")(),
-            destroyButton: markupBlock.destroyButton,
+            destroyButton: destroyMarkup,
             childRows: rowsMarkup,
             targetId: that.id,
             ownId: componentView.id
@@ -716,8 +686,20 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     /** Some cross-mixin grades for StructureView */
 
     fluid.defaults("fluid.author.structureInComponentView", {
-        gradeNames: "fluid.author.structureView",
+        gradeNames: ["fluid.author.structureView", "fluid.plainAriaLabels"],
         bindingRootReference: "{fluid.author.componentGraph}",
+        selectors: {
+            container: ""
+        },
+        plainAriaLabels: {
+            container: {
+                template: "%elementKey of component at path %path",
+                termMap: {
+                    elementKey: "{that}.options.elementKey",
+                    path: "@expand:fluid.author.segsToReadable({componentGraph}.renderPath, {componentView}.viewRecord.coords.parsed)"
+                }
+            }
+        },
         listeners: {
             "{fluid.author.componentView}.events.onRefreshView": {
                 // TODO: It's that big multiplicity problem again: https://issues.fluidproject.org/browse/FLUID-5948
@@ -754,4 +736,4 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         }
     });
 
-})(jQuery, fluid_2_0_0);
+})(jQuery, fluid_3_0_0);

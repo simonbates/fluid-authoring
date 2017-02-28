@@ -286,4 +286,4 @@ parseloop: // eslint-disable-line indent
         return togo;
     };
 
-})(jQuery, fluid_2_0_0);
+})(jQuery, fluid_3_0_0);

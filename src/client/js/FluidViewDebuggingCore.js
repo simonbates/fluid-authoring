@@ -121,4 +121,4 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         return output;
     };
 
-})(jQuery, fluid_2_0_0);
+})(jQuery, fluid_3_0_0);

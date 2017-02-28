@@ -83,7 +83,12 @@ table.fld-author-structureView {
     height: 18px;
 }
 
-.fld-author-componentView:hover .fld-author-destroy {
+.fld-author-row .fl-inlineEdit-invitation {
+    background  : #cff;
+    cursor      : pointer;
+}
+
+.fld-author-componentView:hover .fld-author-destroy, .fld-author-destroy:focus {
     background-image: url("../images/remove.png");
 }
 
