@@ -242,7 +242,9 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         var changedRowPaths = [];
         fluid.each(structureView.pathToRowInfo, function (rowInfo, path) {
             var changeMapValue = fluid.get(changeMap, path);
-            if (changeMapValue) {
+            if (changeMapValue === "DELETE") {
+                globalInvalidation = true;
+            } else if (changeMapValue) {
                 changedRowPaths.push(path);
             }
             if (rowInfo.rowType === "primitive") {
