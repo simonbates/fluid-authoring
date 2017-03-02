@@ -64,9 +64,16 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             }
         },
         modelListeners: {
-            isOpen: {
+            toggleClass: {
+                path: "isOpen",
                 funcName: "fluid.author.toggleClass",
                 args: ["{that}.options.styles", "{that}.dom.holder", "holderOpen", "holderClosed", "{change}.value"]
+            },
+            bindResizable: {
+                path: "isOpen",
+                priority: "after:toggleClass",
+                funcName: "fluid.author.popupPanel.bindResizable",
+                args: ["{that}", "{change}.value"]
             }
         }
     });
@@ -76,6 +83,13 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         fluid.author.panePanel.renderMarkup(that, paneMarkup);
     };
 
+    fluid.author.popupPanel.bindResizable = function (that, isOpen) {
+        if (isOpen) {
+            that.locate("holder").resizable({
+                handles: "n"
+            });
+        }
+    };
 
     // Do-nothing alternative to fluid.author.popupPanel
     fluid.defaults("fluid.author.panePanel", {

@@ -157,7 +157,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     // Approach mirroring https://shoehornwithteeth.com/ramblings/2014/02/compute-a-dom-elements-effective-background-colour/
     fluid.author.getBackgroundColor = function (element) {
         var property = window.getComputedStyle(element).backgroundColor;
-        return property === "rgba(0, 0, 0, 0)" ? null : property;
+        return property === "rgba(0, 0, 0, 0)" || property === "transparent" ? null : property;
     };
 
     fluid.author.findParentAttribute = function (element, getter) {
