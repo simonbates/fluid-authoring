@@ -1,11 +1,22 @@
 {
     "type": "fluid.visible.nexus.config",
     "options": {
+        "serverPort": 9081,
         "components": {
             "server": {
                 "type": "kettle.server",
                 "options": {
+                    "gradeNames": "kettle.server.ws",
+                    "port": "{kettle.config}.options.serverPort",
                     "components": {
+                        "nexus": {
+                            "type": "gpii.nexus",
+                            "options": {
+                                "components": {
+                                    "nexusComponentRoot": "@expand:fluid.componentForPath(globalNexusComponentRoot)"
+                                }
+                            }
+                        },
                         "authoring": {
                             "type": "fluid.authoring.nexus.app"
                         }
@@ -13,6 +24,5 @@
                 }
             }
         }
-    },
-    "mergeConfigs": "%gpii-nexus/configs/gpii.nexus.config.json"
+    }
 }
