@@ -245,6 +245,12 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     fluid.author.componentGraph.remote.onComponentCreate = function (that, shadow) {
         fluid.author.componentGraph.remote.rebaseShadow(that, shadow);
         var type = that.remoteGradeToLocal(shadow.that.typeName);
+        if (!fluid.defaults(type)) {
+         // Stopgap before FLUID-6123 to ensure that local type of the component is constructible
+            fluid.defaults(type, {
+                gradeNames: "fluid.component"
+            });
+        }
         var avatar = fluid.construct(shadow.path, {
             type: type,
             gradeNames: shadow.that.options.gradeNames,
