@@ -8,7 +8,6 @@
     "dependencies": {
         "infusion": "3.0.0-dev.20170221T200310Z.095ff9f",
         "kettle": "1.4.0",
-        "chartAuthoring": "amb26/chartAuthoring#FLOE-484",
         "gpii-nexus": "simonbates/nexus#GPII-2177"
     },
     "license": "(BSD-3-Clause OR ECL-2.0)",
@@ -35,6 +34,7 @@
         "grunt": "1.0.1",
         "grunt-contrib-copy": "1.0.0",
         "grunt-exec": "1.0.0",
-        "grunt-jsonlint": "1.1.0"
+        "grunt-jsonlint": "1.1.0",
+        "chartAuthoring": "amb26/chartAuthoring#FLOE-484"
     }
 }
