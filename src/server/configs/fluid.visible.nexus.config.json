@@ -12,6 +12,12 @@
                     }
                 }
             }
+        },
+        "distributeOptions": {
+            "fluid.visible.nexus.globalComponentRoot": {
+                "record": "@expand:fluid.componentForPath(globalNexusComponentRoot)",
+                "target": "{that gpii.nexus}.options.components.nexusComponentRoot"
+            }
         }
     },
     "mergeConfigs": "%gpii-co-occurrence-engine/configs/gpii.nexusWithCoOccurrenceEngine.config.json"
