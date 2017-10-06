@@ -17,7 +17,7 @@ var fluid = require("infusion"),
 
 fluid.module.register("fluid-authoring", __dirname, require);
 
-require("gpii-nexus");
+require("gpii-co-occurrence-engine");
 
 var infusionBase = fluid.module.resolvePath("%infusion") + "/src/module";
 

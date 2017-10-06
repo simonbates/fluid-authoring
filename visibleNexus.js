@@ -16,10 +16,6 @@ var kettle = require("kettle");
 
 require("./index.js");
 
-fluid.construct("globalNexusComponentRoot", {
-    type: "gpii.nexus.nexusComponentRoot"
-});
-
 kettle.config.loadConfig({
     configName: kettle.config.getConfigName("fluid.visible.nexus.config"),
     configPath: kettle.config.getConfigPath("%fluid-authoring/src/server/configs")
