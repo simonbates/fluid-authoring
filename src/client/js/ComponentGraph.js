@@ -107,7 +107,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             idToPath: {},
             layout: {
                 width: 2000,
-                height: 2000
+                height: 1000
             },
             selectedId: null
         },
