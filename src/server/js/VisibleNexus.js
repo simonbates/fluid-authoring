@@ -74,6 +74,7 @@ fluid.defaults("fluid.authoring.nexus.app", {
             type: "fluid.authoring.nexus.componentTracker"
         }
     },
+    nexusComponentRootSegs: "@expand:fluid.pathForComponent({kettle.server}.nexus.nexusComponentRoot)",
     events: {
         // Locally sensed events corresponding to component tree changes
         onComponentCreate: null,
@@ -130,11 +131,11 @@ fluid.defaults("fluid.authoring.nexus.componentTracker", {
     distributeOptions: {
         creationTracker: {
             record: "fluid.authoring.nexus.creationTracker",
-            target: "{/ fluid.component}.options.gradeNames"
+            target: "{kettle.server nexusComponentRoot fluid.component}.options.gradeNames"
         },
         modelTracker: {
             record: "fluid.authoring.nexus.modelTracker",
-            target: "{/ fluid.modelComponent}.options.gradeNames"
+            target: "{kettle.server nexusComponentRoot fluid.modelComponent}.options.gradeNames"
         }
     }
 });
@@ -185,18 +186,19 @@ fluid.defaults("fluid.authoring.nexus.authorBus.handler", {
     },
     invokers: {
         isIncludedComponent: "fluid.authoring.nexus.authorBus.isIncludedComponent({that}, {arguments}.0)",
-        sendShadows: "fluid.authoring.nexus.authorBus.sendShadows({that})",
+        sendShadows: "fluid.authoring.nexus.authorBus.sendShadows({that}, {fluid.authoring.nexus.app}.options.nexusComponentRootSegs)",
                                                                                   // component, isDestroy
         maybeSendShadow: "fluid.authoring.nexus.authorBus.maybeSendShadow({that}, {arguments}.0, {arguments}.1)",
                                                                                   // shadow, isDestroy
         sendShadow: "fluid.authoring.nexus.authorBus.sendShadow({kettle.config}, {that}, {arguments}.0, {arguments}.1)",
                                                                                   // component, change
-        localModelChanged: "fluid.authoring.nexus.authorBus.localModelChanged({that}, {arguments}.0, {arguments}.1)"
+        localModelChanged: "fluid.authoring.nexus.authorBus.localModelChanged({that}, {arguments}.0, {arguments}.1)",
+                                                                                  // path
+        nexusRelativePath: "fluid.authoring.nexus.authorBus.nexusRelativePath({fluid.authoring.nexus.app}.options.nexusComponentRootSegs, {arguments}.0)"
     }
 });
 
 fluid.authoring.nexus.authorBus.shadowPaths = [
-    "path",
     "that.id",
     "that.typeName",
     "that.options.gradeNames",
@@ -205,6 +207,7 @@ fluid.authoring.nexus.authorBus.shadowPaths = [
 
 fluid.authoring.nexus.authorBus.sendShadow = function (config, request, shadow, isDestroy) {
     var filterShadow = {};
+    filterShadow.path = request.nexusRelativePath(shadow.path);
     fluid.each(fluid.authoring.nexus.authorBus.shadowPaths, function (shadowPath) {
         var value = fluid.get(shadow, shadowPath);
         fluid.set(filterShadow, shadowPath, value);
@@ -228,7 +231,7 @@ fluid.authoring.nexus.authorBus.localModelChanged = function (request, component
     var sources = change.transaction.sources;
     if (shadow && !sources[request.connectMessage.clientId]) {
         request.sendTypedMessage("modelChanged", {
-            componentPath: shadow.path,
+            componentPath: request.nexusRelativePath(shadow.path),
             componentId: shadow.that.id,
             messageGeneration: request.connectMessage.messageGeneration,
             change: fluid.receivedChangeToFirable(change)
@@ -249,10 +252,11 @@ fluid.authoring.nexus.authorBus.maybeSendShadow = function (request, component, 
     }
 };
 
-fluid.authoring.nexus.authorBus.sendShadows = function (request) {
-    var allComponents = [fluid.rootComponent].concat(fluid.queryIoCSelector(fluid.rootComponent, "fluid.component"));
-    fluid.log("sendShadows considering tree of " + allComponents.length + " components with options ", request.filterOptions);
-    fluid.each(allComponents, function (component) {
+fluid.authoring.nexus.authorBus.sendShadows = function (request, nexusComponentRootSegs) {
+    var nexusComponentRoot = fluid.componentForPath(nexusComponentRootSegs);
+    var nexusComponents = [nexusComponentRoot].concat(fluid.queryIoCSelector(nexusComponentRoot, "fluid.component"));
+    fluid.log("sendShadows considering tree of " + nexusComponents.length + " components with options ", request.filterOptions);
+    fluid.each(nexusComponents, function (component) {
         request.maybeSendShadow(component);
     });
 };
@@ -269,8 +273,6 @@ fluid.authoring.nexus.authorBus.onConnect = function (config, request, message) 
     request.connectMessage = message;
     fluid.log("Got connectMessage ", request.connectMessage);
     var filterOptions = fluid.filterKeys(request.connectMessage, ["ignorableRoots", "ignorableGrades"]);
-    var selfPath = fluid.pathForComponent(config);
-    filterOptions.ignorableRoots[config.id] = selfPath;
     request.filterOptions = filterOptions;
     request.sendShadows();
 };
@@ -279,4 +281,16 @@ fluid.authoring.nexus.authorBus.receiveMessage = function (app, request, message
     var eventName = "on" + fluid.capitalizeFirstLetter(message.type);
     fluid.log("Firing event " + eventName + " with payload ", message);
     app.events[eventName].fire(request, message);
+};
+
+fluid.authoring.nexus.authorBus.nexusRelativePath = function (nexusComponentRootSegs, path) {
+    var rootPath = fluid.pathUtil.composeSegments.apply(null, nexusComponentRootSegs);
+    if (path.indexOf(rootPath) === 0) {
+        if (path.length === rootPath.length) {
+            return "";
+        } else {
+            return path.substring(rootPath.length + 1);
+        }
+    }
+    return path;
 };

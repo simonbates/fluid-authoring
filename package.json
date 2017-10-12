@@ -8,7 +8,7 @@
     "dependencies": {
         "infusion": "3.0.0-dev.20170221T200310Z.095ff9f",
         "kettle": "1.4.0",
-        "gpii-nexus": "0.1.0"
+        "gpii-nexus": "0.2.0"
     },
     "license": "(BSD-3-Clause OR ECL-2.0)",
     "keywords": [
