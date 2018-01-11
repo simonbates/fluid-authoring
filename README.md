@@ -101,7 +101,7 @@ This requires the following set of includes for files in this repository:
         <script src="../../src/client/js/DynamicComponentIndexer.js"></script>
         <script src="../../src/client/js/StructureView.js"></script>
         <script src="../../src/client/js/ComponentGraph.js"></script>
-        <script src="../../src/client/js/ComponentGraphArrows.js"></script>
+        <script src="../../src/client/js/ComponentGraphConnectors.js"></script>
         <script src="../../src/client/js/ComponentGraphLocal.js"></script>
 
         <link rel="stylesheet" type="text/css" href="../../src/client/css/ComponentGraph.css" />
