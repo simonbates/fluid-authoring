@@ -530,6 +530,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
                 return fluid.stringTemplate(markup.rowMarkup, terms);
             }
         });
+        // TODO: Don't put HTML in string literals here, use the markup object
         return "<ul>" + renderedRows.join("") + "</ul>";
     };
 
