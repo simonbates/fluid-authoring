@@ -36,8 +36,9 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         highlightChangeColor: "rgb(255, 255, 100)",
         highlightChangeDuration: 2000,
         markup: {
-            container: "<table class=\"fld-author-structureView\" data-structureView-id=\"%componentId\"><tbody class=\"fld-author-structureView-mutableParent\">%rows</tbody></table>",
-            rowMarkup: "<tr><td class=\"fld-author-row %rowClass\" style=\"padding-left: %padding\" data-structureView-rowPath=\"%rowPath\" aria-label=\"%label\">%element</td></tr>",
+            container: "<div class=\"fld-author-structureView\" data-structureView-id=\"%componentId\"><div class=\"fld-author-structureView-mutableParent\">%rows</div></div>",
+            rowMarkup: "<li data-structureView-rowPath=\"%rowPath\">%element</li>",
+            expandedRowMarkup: "<li data-structureView-rowPath=\"%rowPath\">%element %contents</li>",
             elementMarkup: "%expander%key<span id=\"%valueId\"><span class=\"flc-inlineEdit-text\">%value</span></span>",
             expanderClosed: "<span class=\"fl-author-expander fl-author-expander-closed\" tabindex=\"0\" aria-label=\"%label\"></span>",
             expanderOpen: "<span class=\"fl-author-expander fl-author-expander-open\" tabindex=\"0\" aria-label=\"%label\"></span>"
@@ -387,6 +388,9 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         return string === "undefined" ? undefined : JSON.parse(string);
     };
 
+    // TODO: Rename "rows" to "items"
+    // TODO: Rename rowType "typeHeader" to "container"
+
     // Model is the local model, expansionModel is the full expansion model
     // We construct "rowInfo" records since we can't really bear the thought of constructing a full component for each one
     fluid.author.structureView.modelToRowInfo = function (model, segs, expansionModel, depth, rows) {
@@ -409,20 +413,23 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
                 rowType: "primitive"
             });
         } else {
+            if (isExpanded) {
+                var contentsRows = [];
+                fluid.each(model, function (value, key) {
+                    fluid.author.structureView.modelToRowInfo(value, segs.concat([key]), expansionModel, depth + 1, contentsRows);
+                });
+            }
             if (fluid.isArrayable(model)) {
                 pushRow({
                     value: "Array[" + model.length + "]",
-                    rowType: "typeHeader"
+                    rowType: "typeHeader",
+                    contents: contentsRows
                 });
             } else {
                 pushRow({
                     value: "Object",
-                    rowType: "typeHeader"
-                });
-            }
-            if (isExpanded) {
-                fluid.each(model, function (value, key) {
-                    fluid.author.structureView.modelToRowInfo(value, segs.concat([key]), expansionModel, depth + 1, rows);
+                    rowType: "typeHeader",
+                    contents: contentsRows
                 });
             }
         }
@@ -485,7 +492,14 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         fluid.author.structureView.modelToRowInfo(model.hostModel, [], model.expansionModel, 0, rows);
         // TODO: appalling binding to onCreate-rendered label which will not even be available on startup
         var structureLabel = fluid.get(structureView, "plainAriaLabels.container") || "";
+        // TODO: What is structureView.model.rowCount used for?
+        structureView.applier.change("rowCount", rows.length);
+        return fluid.author.structureView.renderRows(structureView, structureLabel, markup, rows);
+    };
+
+    fluid.author.structureView.renderRows = function (structureView, structureLabel, markup, rows) {
         var renderedRows = fluid.transform(rows, function (row) {
+            // TODO: What is pathToRowInfo used for?
             // Abominable side-effect to update lookup. We dream minute by minute of the new renderer
             structureView.pathToRowInfo[row.path] = {
                 valueId: row.valueId,
@@ -505,13 +519,18 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
                 element: element,
                 // encoding hack to allow transporting empty path through system
                 rowPath: fluid.XMLEncode(fluid.author.escapePathForAttribute(row.path)),
-                label: expanderText + pathLabel,
-                padding: row.depth * rowPaddingOffset + "em"
+                label: expanderText + pathLabel
             };
-            return fluid.stringTemplate(markup.rowMarkup, terms);
+            if (row.expanded) {
+                $.extend(terms, {
+                    contents: fluid.author.structureView.renderRows(structureView, structureLabel, markup, row.contents)
+                });
+                return fluid.stringTemplate(markup.expandedRowMarkup, terms);
+            } else {
+                return fluid.stringTemplate(markup.rowMarkup, terms);
+            }
         });
-        structureView.applier.change("rowCount", rows.length);
-        return renderedRows.join("");
+        return "<ul>" + renderedRows.join("") + "</ul>";
     };
 
     fluid.author.structureView.renderMarkup = function (structureView, markup, renderInnerMarkup) {
