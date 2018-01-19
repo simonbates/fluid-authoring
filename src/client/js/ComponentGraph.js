@@ -542,10 +542,10 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             }
         },
         markup: {
-            container: "<div class=\"fld-author-componentView\" data-targetId=\"%targetId\" data-ownId=\"%ownId\" tabindex=\"0\">%memberName<table>%childRows</table>%destroyButton</div>",
+            container: "<div class=\"fld-author-componentView\" data-targetId=\"%targetId\" data-ownId=\"%ownId\" tabindex=\"0\">%memberName<ul>%childRows</ul>%destroyButton</div>",
             memberName: "<div class=\"fld-author-member\">%member</div>",
             destroyButton: "<div class=\"fld-author-destroy\" tabindex=\"0\" aria-label=\"%label\"></div>",
-            structureRow: "<tr class=\"%structureRowClass\"><td class=\"%structureTitleClass\">%title</td><td class=\"%structureCellClass fl-structureCell\"></td></tr>"
+            structureRow: "<li class=\"%structureCellClass fl-structureCell\"></li>"
         },
         invokers: {
             prepareGradeNames: "fluid.author.componentView.prepareGradeNames({componentGraph}.renderGradeName, {that}.viewRecord.that)",
@@ -599,7 +599,6 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     fluid.author.componentView.elementToRowMaterials = function (componentView, containerHolder, element, elementKey) {
         var terms = {
             title: element.title,
-            structureRowClass: "fld-author-" + elementKey + "Row",
             structureCellClass: "fld-author-" + elementKey + "Cell",
             structureTitleClass: "fld-author-" + elementKey + "Title"
         };
@@ -628,6 +627,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         options.parentContainer = fluid.author.makeLocateFunc(containerHolder, "." + terms.structureCellClass);
         options.elementKey = elementKey;
         options.selectors = {
+            // TODO: I have broken this by removing the structureTitleClass element [SJB]
             // Pretty awful - this actually lies outside the structureView's container, but we bolt it on so we can animate it
             title: fluid.author.makeLocateFunc(containerHolder, "." + terms.structureTitleClass)
         };

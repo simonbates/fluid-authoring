@@ -23,6 +23,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         },
         // Clients must override this with an IoC reference to a view component in the scope of which browser event binding will occur
         bindingRootReference: "fluid.mustBeOverridden",
+        elementKey: "fluid.mustBeOverridden", // To be provided by client
         selectors: {
             row: ".fld-author-row",
             mutableParent: ".fld-author-structureView-mutableParent",
@@ -37,8 +38,9 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         highlightChangeDuration: 2000,
         markup: {
             container: "<div class=\"fld-author-structureView\" data-structureView-id=\"%componentId\"><div class=\"fld-author-structureView-mutableParent\">%rows</div></div>",
-            rowMarkup: "<li data-structureView-rowPath=\"%rowPath\">%element</li>",
-            expandedRowMarkup: "<li data-structureView-rowPath=\"%rowPath\">%element %contents</li>",
+            rowMarkup: "<div data-structureView-rowPath=\"%rowPath\">%element</div>",
+            expandedRowMarkup: "<div data-structureView-rowPath=\"%rowPath\">%element <ul>%contents</ul></div>",
+            itemInExpandedRowMarkup: "<li>%row</li>",
             elementMarkup: "%expander%key<span id=\"%valueId\"><span class=\"flc-inlineEdit-text\">%value</span></span>",
             expanderClosed: "<span class=\"fl-author-expander fl-author-expander-closed\" tabindex=\"0\" aria-label=\"%label\"></span>",
             expanderOpen: "<span class=\"fl-author-expander fl-author-expander-open\" tabindex=\"0\" aria-label=\"%label\"></span>"
@@ -393,12 +395,12 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
 
     // Model is the local model, expansionModel is the full expansion model
     // We construct "rowInfo" records since we can't really bear the thought of constructing a full component for each one
-    fluid.author.structureView.modelToRowInfo = function (model, segs, expansionModel, depth, rows) {
+    fluid.author.structureView.modelToRowInfo = function (model, segs, structureRootKey, expansionModel, depth, rows) {
         var isExpanded = fluid.get(expansionModel, segs);
         var pushRow = function (rowInfo) {
             rowInfo.depth = depth;
             rowInfo.expanded = isExpanded;
-            rowInfo.key = segs.length === 0 ? null : segs[segs.length - 1];
+            rowInfo.key = segs.length === 0 ? structureRootKey : segs[segs.length - 1];
             if (rowInfo.rowType === "primitive") {
                 rowInfo.valueId = fluid.allocateGuid();
             }
@@ -416,7 +418,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             if (isExpanded) {
                 var contentsRows = [];
                 fluid.each(model, function (value, key) {
-                    fluid.author.structureView.modelToRowInfo(value, segs.concat([key]), expansionModel, depth + 1, contentsRows);
+                    fluid.author.structureView.modelToRowInfo(value, segs.concat([key]), structureRootKey, expansionModel, depth + 1, contentsRows);
                 });
             }
             if (fluid.isArrayable(model)) {
@@ -489,12 +491,13 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     fluid.author.structureView.renderInnerMarkup = function (structureView, model, markup, rowPaddingOffset) {
         var rows = [];
         structureView.pathToRowInfo = {};
-        fluid.author.structureView.modelToRowInfo(model.hostModel, [], model.expansionModel, 0, rows);
+        fluid.author.structureView.modelToRowInfo(model.hostModel, [], structureView.options.elementKey, model.expansionModel, 0, rows);
         // TODO: appalling binding to onCreate-rendered label which will not even be available on startup
         var structureLabel = fluid.get(structureView, "plainAriaLabels.container") || "";
         // TODO: What is structureView.model.rowCount used for?
         structureView.applier.change("rowCount", rows.length);
-        return fluid.author.structureView.renderRows(structureView, structureLabel, markup, rows);
+        var renderedRows = fluid.author.structureView.renderRows(structureView, structureLabel, markup, rows);
+        return renderedRows.length > 0 ? renderedRows[0] : "";
     };
 
     fluid.author.structureView.renderRows = function (structureView, structureLabel, markup, rows) {
@@ -522,16 +525,22 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
                 label: expanderText + pathLabel
             };
             if (row.expanded) {
+                // TODO: This is pretty messy -- clean it up
+                var expandedContentsRows = fluid.author.structureView.renderRows(structureView, structureLabel, markup, row.contents);
+                var expandedContentsRendered = fluid.transform(expandedContentsRows, function (row) {
+                    return fluid.stringTemplate(markup.itemInExpandedRowMarkup, {
+                        row: row
+                    });
+                });
                 $.extend(terms, {
-                    contents: fluid.author.structureView.renderRows(structureView, structureLabel, markup, row.contents)
+                    contents: expandedContentsRendered.join("")
                 });
                 return fluid.stringTemplate(markup.expandedRowMarkup, terms);
             } else {
                 return fluid.stringTemplate(markup.rowMarkup, terms);
             }
         });
-        // TODO: Don't put HTML in string literals here, use the markup object
-        return "<ul>" + renderedRows.join("") + "</ul>";
+        return renderedRows;
     };
 
     fluid.author.structureView.renderMarkup = function (structureView, markup, renderInnerMarkup) {
