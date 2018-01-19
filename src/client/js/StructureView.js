@@ -41,7 +41,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             rowMarkup: "<div data-structureView-rowPath=\"%rowPath\">%element</div>",
             expandedRowMarkup: "<div data-structureView-rowPath=\"%rowPath\">%element <ul>%contents</ul></div>",
             itemInExpandedRowMarkup: "<li>%row</li>",
-            elementMarkup: "%expander%key<span id=\"%valueId\"><span class=\"flc-inlineEdit-text\">%value</span></span>",
+            elementMarkup: "<div class=\"fl-author-item\">%expander%key<span id=\"%valueId\"><span class=\"flc-inlineEdit-text\">%value</span></span></div>",
             expanderClosed: "<span class=\"fl-author-expander fl-author-expander-closed\" tabindex=\"0\" aria-label=\"%label\"></span>",
             expanderOpen: "<span class=\"fl-author-expander fl-author-expander-open\" tabindex=\"0\" aria-label=\"%label\"></span>"
         },

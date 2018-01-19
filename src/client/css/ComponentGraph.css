@@ -43,8 +43,7 @@
 .fld-author-componentView {
 /*    width: 200px;
     height: 400px; */
-    background-color: #6df;
-    border: 1px solid #777;
+    background-color: #acb9c1;
     position: absolute;
     left: 20px;
     top: 20px;
@@ -103,7 +102,6 @@ table.fld-author-structureView {
 }
 
 .fl-author-expander {
-    color: #666;
     padding-right: 0.1em;
     margin-left: -0.1em;
 }
@@ -120,4 +118,33 @@ table.fld-author-structureView {
     position: absolute;
     bottom: 0;
     left: 10px;
+}
+
+.fld-author-componentView ul {
+    padding-left: 2.5em;
+}
+
+.fld-author-componentView > ul {
+    padding: 0;
+    margin: 0.25em 0.5em 0.75em 0.5em;
+}
+
+.fld-author-componentView li {
+    list-style: none;
+}
+
+.fl-author-item {
+    background: #dfe2e5;
+    color: #435566;
+    margin-bottom: 0.2em;
+    padding: 0.4em 1em;
+}
+
+/* TODO: Use a less brittle selector here for the topmost items */
+div.fld-author-structureView-mutableParent > div > div.fl-author-item {
+    display: inline-block;
+    background: #646f75;
+    color: #eee;
+    margin-top: 0.5em;
+    padding-right: 3em;
 }
