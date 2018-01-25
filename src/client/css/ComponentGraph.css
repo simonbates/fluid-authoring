@@ -1,5 +1,11 @@
 /** TODO: this definition needs to go into FluidDebugging.css together with the resizable trigger **/
 
+/* TODO: Modify the Infusion fluidDebugging.css instead */
+/* Override #dff in https://github.com/fluid-project/infusion/blob/master/src/framework/core/css/fluidDebugging.css */
+div.fl-debug-holder {
+    background-color: #fff;
+}
+
 .fl-debug-holder-open {
     border-top-style: ridge;
 }
@@ -24,8 +30,7 @@
 }
 
 .fld-author-arrow {
-    stroke: #888;
-    fill: #9dd;
+    stroke: #999;
 }
 
 .fl-author-scrollingPane {
@@ -78,6 +83,7 @@ table.fld-author-structureView {
     position: absolute;
     top: -1.5em;
     white-space: nowrap;
+    font-weight: bold;
 }
 
 .fld-author-destroy {

@@ -37,15 +37,11 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     fluid.defaults("fluid.author.svgArrow", {
         gradeNames: ["fluid.newViewComponent", "fluid.author.containerSVGRenderingView"],
         markup: {
-            arrow: "<polygon xmlns=\"http://www.w3.org/2000/svg\" class=\"fld-author-arrow\" points=\"%points\" transform=\"%transform\"/>",
-            transform: "translate(%startX %startY) rotate(%angle)"
+            arrow: "<polyline xmlns=\"http://www.w3.org/2000/svg\" class=\"fld-author-arrow\" points=\"%points\"/>"
         },
         model: {
             arrowGeometry: {
                 length: "{that}.model.polar.length",
-                width: 10,
-                headWidth: 20,
-                headHeight: 20,
                 angle: "{that}.model.polar.angle",
                 start: [100, 100],
                 end: [200, 200]
@@ -60,26 +56,15 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
                     args: ["{that}.model.arrowGeometry.start", "{that}.model.arrowGeometry.end"]
                 }
             },
-            "geometryToTransform": {
-                target: "arrowTransform",
-                singleTransform: {
-                    type: "fluid.transforms.stringTemplate",
-                    template: "{that}.options.markup.transform",
-                    terms: {
-                        startX: "{that}.model.arrowGeometry.start.0",
-                        startY: "{that}.model.arrowGeometry.start.1",
-                        angle: 0
-                    }
-                }
-            },
             "geometryToPoints": {
                 target: "arrowPoints",
                 singleTransform: {
                     type: "fluid.transforms.free",
                     func: "fluid.author.svgArrow.renderArrowPoints",
-                    args: ["{that}.model.arrowGeometry.width", "{that}.model.arrowGeometry.headWidth",
-                           "{that}.model.arrowGeometry.length", "{that}.model.arrowGeometry.headHeight",
-                           "{that}.model.arrowGeometry.angle"]
+                    args: [
+                        "{that}.model.arrowGeometry.start",
+                        "{that}.model.arrowGeometry.end"
+                    ]
                 }
             }
         },
@@ -87,8 +72,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             renderMarkup: {
                 funcName: "fluid.stringTemplate",
                 args: ["{that}.options.markup.arrow", {
-                    points: "{that}.model.arrowPoints",
-                    transform: "{that}.model.arrowTransform"
+                    points: "{that}.model.arrowPoints"
                 }]
             }
         },
@@ -98,31 +82,12 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
                 "this": "{that}.container",
                 method: "attr",
                 args: ["points", "{change}.value"]
-            },
-            "arrowTransform": {
-                excludeSource: "init",
-                "this": "{that}.container",
-                method: "attr",
-                args: ["transform", "{change}.value"]
             }
         }
     });
 
-    fluid.author.svgArrow.renderArrowPoints = function (width, headWidth, length, headHeight, angle) {
-        var w = width / 2,
-            hw = headWidth / 2,
-            hp = length - headHeight,
-            c = Math.cos(angle),
-            s = Math.sin(angle);
-        var points = [
-            [-w / s, 0],
-            [w / s, 0],
-            [hp * c + w * s, hp * s - w * c],
-            [hp * c + hw * s, hp * s - hw * c],
-            [length * c, length * s],
-            [hp * c - hw * s, hp * s + hw * c],
-            [hp * c - w * s, hp * s + w * c]
-        ];
+    fluid.author.svgArrow.renderArrowPoints = function (start, end) {
+        var points = [start, end];
         return fluid.author.pointsToSVG(points);
     };
 
@@ -179,8 +144,8 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
         var childComponent = componentGraph.idToShadow[sourceId].that;
         var childPosition = fluid.author.componentGraph.childPosition(parentShadow.memberToChild, childComponent);
         return {
-            start: [parentLayout.left + parentLayout.width * (childPosition.index + 1) / (childPosition.children.length + 1),
-                parentLayout.top + parentLayout.height - 0.5],
+            start: [parentLayout.left + parentLayout.width / 2,
+                parentLayout.top + parentLayout.height],
             end: [sourceLayout.left + sourceLayout.width / 2, sourceLayout.top]
         };
     };
