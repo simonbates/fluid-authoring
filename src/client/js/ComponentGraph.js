@@ -542,10 +542,10 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
             }
         },
         markup: {
-            container: "<div class=\"fld-author-componentView\" data-targetId=\"%targetId\" data-ownId=\"%ownId\" tabindex=\"0\">%memberName<ul>%childRows</ul>%destroyButton</div>",
+            container: "<div class=\"fld-author-componentView\" data-targetId=\"%targetId\" data-ownId=\"%ownId\" tabindex=\"0\">%memberName<ul role=\"tree\">%childRows</ul>%destroyButton</div>",
             memberName: "<div class=\"fld-author-member\">%member</div>",
             destroyButton: "<div class=\"fld-author-destroy\" tabindex=\"0\" aria-label=\"%label\"></div>",
-            structureRow: "<li class=\"%structureCellClass fl-structureCell\"></li>"
+            structureRow: "<li role=\"treeitem\" tabindex=\"0\" class=\"%structureCellClass fl-structureCell\"></li>"
         },
         invokers: {
             prepareGradeNames: "fluid.author.componentView.prepareGradeNames({componentGraph}.renderGradeName, {that}.viewRecord.that)",
