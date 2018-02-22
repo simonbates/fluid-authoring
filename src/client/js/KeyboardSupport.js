@@ -120,7 +120,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     fluid.registerNamespace("fluid.keys.selectable");
 
     fluid.keys.selectable.processEvent = function (options, evt) {
-        var closest = $(event.target).closest(options.filterSelector)[0];
+        var closest = $(evt.target).closest(options.filterSelector)[0];
         var mapped = closest && options.elementMapper(closest);
         fluid.log("fluid.keys.selectable.processEvent got mapped value ", mapped, " from event ", evt);
         if (fluid.isValue(mapped)) {
