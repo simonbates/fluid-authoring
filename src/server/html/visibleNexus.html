@@ -16,6 +16,7 @@
         <script src="%infusion/framework/core/js/Fluid.js"></script>
         <script src="%infusion/framework/core/js/FluidDebugging.js"></script>
         <script src="%infusion/framework/core/js/FluidDocument.js"></script>
+        <script src="%infusion/framework/core/js/FluidPromises.js"></script>
         <script src="%infusion/framework/core/js/FluidRequests.js"></script>
         <script src="%infusion/framework/core/js/FluidIoC.js"></script>
         <script src="%infusion/framework/core/js/DataBinding.js"></script>
@@ -29,7 +30,11 @@
         <script src="%infusion/components/inlineEdit/js/InlineEdit.js"></script>
 
         <script src="%infusion/components/tooltip/js/Tooltip.js"></script>
-        
+
+        <script src="%gpii-nexus-client/NexusClient.js"></script>
+        <script src="%gpii-nexus-client/NexusClientHttpJquery.js"></script>
+        <script src="%gpii-nexus-client/NexusConfigLoader.js"></script>
+
         <script src="%fluid-authoring/shared/js/AuthorUtils.js"></script>
         <script src="%fluid-authoring/shared/js/ComponentGraphUtilities.js"></script>
         <script src="%fluid-authoring/client/js/PlainAriaLabels.js"></script>
@@ -42,6 +47,7 @@
         <script src="%fluid-authoring/client/js/ComponentGraph.js"></script>
         <script src="%fluid-authoring/client/js/ComponentGraphConnectors.js"></script>
         <script src="%fluid-authoring/client/js/ComponentGraphRemote.js"></script>
+        <script src="%fluid-authoring/client/js/NexusConfigLoaderControl.js"></script>
 
         <link rel="stylesheet" type="text/css" href="%fluid-authoring/client/css/ComponentGraph.css" />
 
@@ -49,9 +55,19 @@
     </head>
 
     <body>
+        <div>
+            <!-- TODO: Hide the file input -->
+            <!-- See: https://stackoverflow.com/questions/10798761/how-to-link-an-input-button-to-a-file-select-window -->
+            <!-- And: https://blog.mariusschulz.com/2016/05/31/programmatically-opening-a-file-dialog-with-javascript -->
+            <div id="flc-visibleNexus-nexusConfigLoaderControl">
+                <input class="flc-nexusConfigLoaderControl-fileInput" type="file">
+                <input class="flc-nexusConfigLoaderControl-loadButton" type="button" value="Load Configuration">
+            </div>
+        </div>
+        <div id="flc-visibleNexus-componentGraph"></div>
         <script>
-            fluid.author.componentGraphPanel.fullFrame.remote("body");
+            fluid.author.componentGraphPanel.fullFrame.remote("#flc-visibleNexus-componentGraph");
+            fluid.author.nexusConfigLoaderControl("#flc-visibleNexus-nexusConfigLoaderControl");
         </script>
-
     </body>
 </html>

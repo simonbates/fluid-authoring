@@ -42,6 +42,11 @@ fluid.defaults("fluid.authoring.nexus.infusionStaticHandler", {
     staticMiddleware: "{app}.infusionStaticMiddleware"
 });
 
+fluid.defaults("fluid.authoring.nexus.nexusClientStaticHandler", {
+    gradeNames: "fluid.authoring.static.handler",
+    staticMiddleware: "{app}.nexusClientStaticMiddleware"
+});
+
 fluid.defaults("fluid.authoring.nexus.selfStaticHandler", {
     gradeNames: "fluid.authoring.static.handler",
     staticMiddleware: "{app}.selfStaticMiddleware"
@@ -62,6 +67,12 @@ fluid.defaults("fluid.authoring.nexus.app", {
             type: "kettle.middleware.static",
             options: {
                 root: "%infusion/src/"
+            }
+        },
+        nexusClientStaticMiddleware: {
+            type: "kettle.middleware.static",
+            options: {
+                root: "%gpii-nexus-client/src/"
             }
         },
         selfStaticMiddleware: {
@@ -96,6 +107,12 @@ fluid.defaults("fluid.authoring.nexus.app", {
         infusionStatic: {
             type: "fluid.authoring.nexus.infusionStaticHandler",
             prefix: "/infusion",
+            route: "/*",
+            method: "get"
+        },
+        nexusClientStatic: {
+            type: "fluid.authoring.nexus.nexusClientStaticHandler",
+            prefix: "/gpii-nexus-client",
             route: "/*",
             method: "get"
         },
