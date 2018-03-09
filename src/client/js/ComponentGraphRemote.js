@@ -300,7 +300,7 @@ https://github.com/fluid-project/infusion/raw/master/Infusion-LICENSE.txt
     fluid.defaults("fluid.author.componentGraphPanel.fullFrame.remote", {
         gradeNames: "fluid.author.componentGraphPanel.fullFrame",
         distributeOptions: {
-            record: ["fluid.author.componentGraph.remote", "fluid.author.componentGraph.remoteWithCreator"],
+            record: ["fluid.author.componentGraph.remote"],
             target: "{that fluid.author.componentGraph}.options.gradeNames"
         }
     });
