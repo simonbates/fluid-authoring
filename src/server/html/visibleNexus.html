@@ -50,21 +50,26 @@
         <script src="%fluid-authoring/client/js/NexusConfigLoaderControl.js"></script>
 
         <link rel="stylesheet" type="text/css" href="%fluid-authoring/client/css/ComponentGraph.css" />
+        <link rel="stylesheet" type="text/css" href="%fluid-authoring/client/css/VisibleNexus.css" />
 
         <title>Visible Nexus</title>
     </head>
 
     <body>
-        <div>
-            <!-- TODO: Hide the file input -->
-            <!-- See: https://stackoverflow.com/questions/10798761/how-to-link-an-input-button-to-a-file-select-window -->
-            <!-- And: https://blog.mariusschulz.com/2016/05/31/programmatically-opening-a-file-dialog-with-javascript -->
-            <div id="flc-visibleNexus-nexusConfigLoaderControl">
-                <input class="flc-nexusConfigLoaderControl-fileInput" type="file">
-                <input class="flc-nexusConfigLoaderControl-loadButton" type="button" value="Load Configuration">
+        <div class="fl-visibleNexus-wrapper">
+            <div class="fl-visibleNexus-sidepanel">
+                <h1>Visible Nexus</h1>
+                <div id="flc-visibleNexus-nexusConfigLoaderControl">
+                    <!-- TODO: Hide the file input -->
+                    <!-- See: https://stackoverflow.com/questions/10798761/how-to-link-an-input-button-to-a-file-select-window -->
+                    <!-- And: https://blog.mariusschulz.com/2016/05/31/programmatically-opening-a-file-dialog-with-javascript -->
+                    <input class="flc-nexusConfigLoaderControl-fileInput fl-nexusConfigLoaderControl-fileInput" type="file">
+                    <br>
+                    <input class="flc-nexusConfigLoaderControl-loadButton fl-nexusConfigLoaderControl-loadButton" type="button" value="Load Configuration">
+                </div>
             </div>
+            <div id="flc-visibleNexus-componentGraph"></div>
         </div>
-        <div id="flc-visibleNexus-componentGraph"></div>
         <script>
             fluid.author.componentGraphPanel.fullFrame.remote("#flc-visibleNexus-componentGraph");
             fluid.author.nexusConfigLoaderControl("#flc-visibleNexus-nexusConfigLoaderControl");
